@@ -1,10 +1,9 @@
 import React from 'react';
 
 // Dimensiones fijas para A4 a 96 DPI (aprox 794px ancho)
-// Mantenemos clases de Tailwind pero forzamos estilos en línea para impresión crítica
 const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
   
-  // Helpers para manejo de datos
+  // Helpers
   const updateItem = (index, field, value) => {
     const newItems = [...data.items];
     newItems[index][field] = value;
@@ -27,26 +26,62 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
   const total = subtotal + itbis;
   const format = (v) => v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
+  // Renderiza un input o texto plano según si se está exportando
+  const RenderField = ({ value, placeholder, onChange, className, style, multiline = false }) => {
+    if (isExporting) {
+        return (
+            <div className={`${className} leading-tight`} style={{...style, borderBottom: 'none', background: 'transparent', padding: '2px 0', minHeight: '1.5em'}}>
+                {value || <span className="text-transparent">.</span>} {/* Punto invisible para mantener altura */}
+            </div>
+        );
+    }
+    
+    if (multiline) {
+        return (
+            <textarea 
+                value={value} 
+                onChange={onChange}
+                className={`${className} focus:bg-white/50 transition-colors`} 
+                placeholder={placeholder}
+                rows={1}
+                style={style}
+                onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+            />
+        );
+    }
+
+    return (
+        <input 
+            value={value} 
+            onChange={onChange}
+            className={`${className} focus:bg-white/50 transition-colors`} 
+            placeholder={placeholder} 
+            style={style}
+        />
+    );
+  };
+
   return (
     <div 
       id={id} 
-      className="invoice-paper bg-white text-[#303F1D] font-sans relative flex flex-col shadow-2xl"
+      className="invoice-paper font-sans relative flex flex-col shadow-xl"
       style={{
         width: '794px', // Ancho exacto A4
         minHeight: '1123px', // Alto mínimo A4
         padding: '0',
         margin: '0 auto',
-        backgroundColor: '#f4eee8', // Color de fondo crema suave
-        color: '#303F1D'
+        backgroundColor: '#f4eee8', // Fondo crema sólido (importante para evitar transparencia)
+        color: '#1a2310', // Texto casi negro para mejor contraste
+        lineHeight: '1.2'
       }}
     >
       {/* HEADER SVG */}
-      <div className="w-full">
+      <div className="w-full bg-[#303F1D]">
         <svg viewBox="0 0 612 95.04" className="w-full block" style={{ shapeRendering: 'geometricPrecision' }}>
             <rect fill="#303F1D" width="612" height="95.04"/>
             <g fill="#FFFFFF">
                 <path d="M519.75,75.5h30.88V35.35c0.78,0.36,1.45,0.57,1.99,0.97c0.27,0.21,0.36,0.75,0.36,1.15c0,5.16,0,10.29,0,15.45v24.87H511.9c0-0.36-0.06-0.72-0.06-1.06c0-8.3,0-16.6,0-24.9c0-0.88,0.27-1.24,1.09-1.45c2.23-0.63,4.47-1.36,6.85-2.08v27.23L519.75,75.5z"/>
-                <text transform="matrix(1 0 0 1 82.1889 80.8513)" fill="#8E8B82" fontFamily="Helvetica, Arial, sans-serif" fontSize="11">Inmobiliaria . Arquitectura . Construcción</text>
+                <text transform="matrix(1 0 0 1 82.1889 80.8513)" fill="#b8b5ad" fontFamily="Helvetica, Arial, sans-serif" fontSize="11">Inmobiliaria . Arquitectura . Construcción</text>
                 <path d="M73.5,20.66v13.36c0,4.07-2.14,7.05-7.57,7.05h-6.92V37.5h6.71c3.21,0,4.18-1.54,4.18-3.5V20.66H73.5z"/>
                 <rect x="81.28" y="20.66" width="3.58" height="20.41"/>
                 <path d="M103.81,20.66c4.59,0,6.55,2.85,6.55,6.11c0,3.26-1.2,5.27-4.33,6.13l4.75,8.17h-3.97l-4.65-7.88h-5.32c-0.34,0-0.52,0.16-0.52,0.52v7.39h-3.58v-8.07c0-2.3,0.97-3.24,3.21-3.24h7.96c2.04,0,2.84-1.38,2.84-2.84c0-1.46-0.89-2.69-2.84-2.69h-11.2v-3.6h11.07H103.81z"/>
@@ -55,165 +90,229 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
         </svg>
       </div>
 
-      <div className="flex-1 flex flex-col p-12">
-         {/* INFO SECTION */}
-         <div className="flex justify-between gap-8 mb-8">
-            <div className="flex-1 flex flex-col gap-4">
+      <div className="flex-1 flex flex-col px-12 py-8">
+         {/* INFO SECTION - Usamos Grid para evitar superposiciones */}
+         <div className="flex items-start justify-between gap-6 mb-8">
+            
+            {/* Columna Izquierda: Cliente */}
+            <div className="w-[55%] flex flex-col gap-5 pt-2">
                 <div>
-                    <span className="text-sm font-bold block mb-1">FECHA:</span>
-                    <input type="date" value={data.fecha} onChange={(e) => setData({...data, fecha: e.target.value})} className="input-ghost text-[#303F1D] w-auto font-bold bg-transparent border-none outline-none" />
+                    <span className="text-xs font-bold block mb-1 uppercase tracking-wider text-[#303F1D]">FECHA DE EMISIÓN</span>
+                    <input 
+                        type="date" 
+                        value={data.fecha} 
+                        onChange={(e) => setData({...data, fecha: e.target.value})} 
+                        className="bg-transparent font-bold text-[#303F1D] text-lg outline-none p-0 border-none" 
+                    />
                 </div>
                 
-                <div className="border-l-[3px] border-[#303F1D] pl-4 text-sm flex flex-col gap-1">
-                    <div className="font-bold mb-1 text-base">DATOS DEL CLIENTE</div>
-                    <input className="input-ghost font-bold text-lg bg-transparent border-none outline-none w-full placeholder-gray-400" placeholder="Nombre del Cliente / Empresa..." value={data.clientName} onChange={e => setData({...data, clientName: e.target.value})} />
-                    <input className="input-ghost bg-transparent border-none outline-none w-full placeholder-gray-400" placeholder="ID / RNC: 000-00000-0" value={data.clientId} onChange={e => setData({...data, clientId: e.target.value})} />
-                    <input className="input-ghost bg-transparent border-none outline-none w-full placeholder-gray-400" placeholder="Ubicación del Proyecto..." value={data.clientLocation} onChange={e => setData({...data, clientLocation: e.target.value})} />
-                    <input className="input-ghost bg-transparent border-none outline-none w-full placeholder-gray-400" placeholder="Teléfono / Contacto..." value={data.clientContact} onChange={e => setData({...data, clientContact: e.target.value})} />
+                <div className="border-l-[4px] border-[#303F1D] pl-4 flex flex-col gap-2">
+                    <div>
+                        <div className="text-xs font-bold text-[#303F1D] uppercase tracking-wider mb-1">FACTURAR A:</div>
+                        <RenderField 
+                            className="text-xl font-bold w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                            placeholder="Nombre del Cliente..." 
+                            value={data.clientName} 
+                            onChange={e => setData({...data, clientName: e.target.value})} 
+                        />
+                    </div>
+                    
+                    <RenderField 
+                        className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                        placeholder="RNC / Cédula" 
+                        value={data.clientId} 
+                        onChange={e => setData({...data, clientId: e.target.value})} 
+                    />
+                    <RenderField 
+                        className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                        placeholder="Ubicación / Dirección" 
+                        value={data.clientLocation} 
+                        onChange={e => setData({...data, clientLocation: e.target.value})} 
+                    />
+                    <RenderField 
+                        className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                        placeholder="Teléfono / Contacto" 
+                        value={data.clientContact} 
+                        onChange={e => setData({...data, clientContact: e.target.value})} 
+                    />
                 </div>
             </div>
 
-            <div className="text-right flex-1">
-                <h2 className="text-4xl text-[#303F1D] uppercase tracking-widest font-normal m-0">Cotización</h2>
-                <div className="mt-4 flex flex-col items-end">
-                    <span className="font-bold text-sm">PROYECTO:</span>
-                    <input className="input-ghost text-right font-normal text-xl bg-transparent border-none outline-none w-full placeholder-gray-400" placeholder="NOMBRE DEL PROYECTO" value={data.projectTitle} onChange={e => setData({...data, projectTitle: e.target.value})} />
+            {/* Columna Derecha: Título y Folio */}
+            <div className="w-[45%] text-right pt-2">
+                <h2 className="text-[42px] leading-none text-[#303F1D] uppercase font-light m-0">Cotización</h2>
+                
+                <div className="mt-6 flex flex-col items-end gap-1">
+                    <span className="font-bold text-xs uppercase tracking-wider text-[#303F1D]">PROYECTO</span>
+                    <RenderField 
+                        className="text-right font-bold text-lg w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                        placeholder="NOMBRE DEL PROYECTO" 
+                        value={data.projectTitle} 
+                        onChange={e => setData({...data, projectTitle: e.target.value})} 
+                    />
                 </div>
-                <div className="text-[#8e8b82] text-xs mt-1 flex justify-end items-center gap-1">
-                    FOLIO: <input className="input-ghost w-32 text-right text-[#8e8b82] bg-transparent border-none outline-none placeholder-gray-300" placeholder="#ARC-2026-001" value={data.projectFolio} onChange={e => setData({...data, projectFolio: e.target.value})} />
+                
+                <div className="mt-2 flex justify-end items-center gap-2">
+                     <span className="text-[#8e8b82] text-xs font-bold">FOLIO:</span>
+                     <RenderField 
+                        className="w-32 text-right text-[#8e8b82] font-mono text-sm bg-transparent border-none outline-none placeholder-gray-300" 
+                        placeholder="#001" 
+                        value={data.projectFolio} 
+                        onChange={e => setData({...data, projectFolio: e.target.value})} 
+                    />
                 </div>
             </div>
          </div>
 
          {/* TABLE */}
-         <table className="w-full border-collapse mt-6 text-black table-fixed">
-            <thead>
-                <tr className="border-b-2 border-[#303F1D]">
-                    <th className="text-left py-2 text-xs uppercase w-[5%]">No.</th>
-                    <th className="text-left py-2 text-xs uppercase w-[50%]">Descripción del Servicio</th>
-                    <th className="text-left py-2 text-xs uppercase w-[15%]">Precio</th>
-                    <th className="text-left py-2 text-xs uppercase w-[10%]">Cant.</th>
-                    <th className="text-right py-2 text-xs uppercase w-[20%] bg-[#303F1D] text-white px-2">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {data.items.map((item, index) => (
-                    <tr key={item.id} className="border-b border-[#dcd7d0] group">
-                        <td className="py-3 text-sm relative align-top font-bold text-gray-500">
-                           {/* Botón borrar solo visible si no se exporta */}
-                           {!isExporting && (
-                               <button onClick={() => removeItem(item.id)} className="absolute left-[-20px] top-3 text-red-400 hover:text-red-600 font-bold px-1 transition-opacity opacity-0 group-hover:opacity-100">
-                                   &times;
-                               </button>
-                           )}
-                           {index + 1}
-                        </td>
-                        <td className="py-3 text-sm align-top">
-                            <textarea 
-                                value={item.desc} 
-                                onChange={(e) => updateItem(index, 'desc', e.target.value)}
-                                className="input-ghost w-full bg-transparent border-none outline-none resize-none overflow-hidden placeholder-gray-300"
-                                placeholder="Descripción del concepto..."
-                                rows={1}
-                                style={{ minHeight: '1.5em' }}
-                                onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-                            />
-                        </td>
-                        <td className="py-3 text-sm align-top">
-                            <input type="number" className="input-ghost w-full bg-transparent border-none outline-none placeholder-gray-300" placeholder="0.00"
-                                value={item.price || ''} onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value) || 0)} />
-                        </td>
-                        <td className="py-3 text-sm align-top">
-                            <input type="number" className="input-ghost w-full bg-transparent border-none outline-none placeholder-gray-300" placeholder="1"
-                                value={item.qty || ''} onChange={(e) => updateItem(index, 'qty', parseFloat(e.target.value) || 0)} />
-                        </td>
-                        <td className="py-3 text-sm text-right bg-[#303F1D] text-white font-bold px-2 align-top rounded-sm">
-                            RD${format(item.price * item.qty)}
-                        </td>
+         <div className="mt-4">
+            <table className="w-full border-collapse table-fixed">
+                <thead>
+                    <tr className="border-b-[3px] border-[#303F1D]">
+                        <th className="text-left py-2 text-xs font-bold uppercase w-[8%] text-[#303F1D]">No.</th>
+                        <th className="text-left py-2 text-xs font-bold uppercase w-[52%] text-[#303F1D]">Descripción</th>
+                        <th className="text-right py-2 text-xs font-bold uppercase w-[15%] text-[#303F1D]">Precio</th>
+                        <th className="text-center py-2 text-xs font-bold uppercase w-[10%] text-[#303F1D]">Cant.</th>
+                        <th className="text-right py-2 text-xs font-bold uppercase w-[15%] text-white bg-[#303F1D] px-2 rounded-t-sm">Total</th>
                     </tr>
-                ))}
-            </tbody>
-         </table>
+                </thead>
+                <tbody>
+                    {data.items.map((item, index) => (
+                        <tr key={item.id} className="border-b border-[#dcd7d0] group">
+                            <td className="py-3 text-sm font-bold text-gray-500 align-top relative">
+                               {!isExporting && (
+                                   <button onClick={() => removeItem(item.id)} className="absolute -left-4 top-3 text-red-400 hover:text-red-600 font-bold px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                       &times;
+                                   </button>
+                               )}
+                               {(index + 1).toString().padStart(2, '0')}
+                            </td>
+                            <td className="py-3 text-sm align-top pr-4">
+                                <RenderField 
+                                    multiline
+                                    value={item.desc} 
+                                    onChange={(e) => updateItem(index, 'desc', e.target.value)}
+                                    className="w-full bg-transparent border-none outline-none resize-none overflow-hidden placeholder-gray-300 text-gray-800"
+                                    placeholder="Descripción del servicio o producto..."
+                                    style={{ minHeight: '1.5em' }}
+                                />
+                            </td>
+                            <td className="py-3 text-sm align-top text-right font-medium">
+                                <div className="flex justify-end items-center gap-1">
+                                    <span className="text-[10px] text-gray-400">$</span>
+                                    <RenderField 
+                                        type="number" 
+                                        className="w-full text-right bg-transparent border-none outline-none placeholder-gray-300" 
+                                        placeholder="0.00"
+                                        value={item.price || ''} 
+                                        onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value) || 0)} 
+                                    />
+                                </div>
+                            </td>
+                            <td className="py-3 text-sm align-top text-center">
+                                <RenderField 
+                                    type="number" 
+                                    className="w-full text-center bg-transparent border-none outline-none placeholder-gray-300" 
+                                    placeholder="1"
+                                    value={item.qty || ''} 
+                                    onChange={(e) => updateItem(index, 'qty', parseFloat(e.target.value) || 0)} 
+                                />
+                            </td>
+                            <td className="py-3 text-sm text-right font-bold text-[#303F1D] bg-[#303F1D]/5 px-2 align-top">
+                                {format(item.price * item.qty)}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
 
-         {!isExporting && (
-             <button onClick={addItem} className="w-full border-2 border-dashed border-[#303F1D]/30 text-[#303F1D] font-bold py-2 mt-4 rounded-lg hover:bg-[#303F1D]/5 transition text-sm uppercase tracking-wide opacity-70 hover:opacity-100">
-                 + Agregar Fila
-             </button>
-         )}
+            {!isExporting && (
+                <button onClick={addItem} className="w-full py-2 mt-2 text-xs font-bold text-[#303F1D] border border-dashed border-[#303F1D]/40 rounded hover:bg-[#303F1D]/5 transition uppercase tracking-wider">
+                    + Agregar Concepto
+                </button>
+            )}
+         </div>
 
-         {/* TOTALS */}
-         <div className="flex justify-between items-end mt-10 text-black break-inside-avoid">
-            <div>
-                <div className="font-bold text-sm text-[#8e8b82]">MONTO TOTAL:</div>
-                <h3 className="text-3xl font-bold mt-1 text-[#303F1D]">RD${format(total)}</h3>
+         {/* TOTALS & FOOTER - Usamos flex-col-reverse para que los totales queden arriba en movil pero aqui es A4 */}
+         <div className="flex justify-between mt-12 mb-8 break-inside-avoid">
+            <div className="w-[55%] pr-8">
+                <div className="text-xs font-bold text-[#303F1D] uppercase tracking-wider mb-2 border-b border-[#303F1D] pb-1">Observaciones</div>
+                <RenderField 
+                    multiline
+                    className="w-full min-h-[100px] text-sm bg-[#fcfaf8] border border-[#e5e0d8] p-3 rounded outline-none resize-none placeholder-gray-400 text-gray-700 leading-relaxed"
+                    value={data.notes}
+                    onChange={e => setData({...data, notes: e.target.value})}
+                    placeholder="Escriba aquí notas importantes, condiciones de pago, tiempo de entrega..."
+                />
             </div>
-            <div className="w-72 text-sm">
-                <div className="flex justify-between mb-2 border-b border-gray-200 pb-1">
-                    <span className="text-gray-600">SUBTOTAL</span>
-                    <span className="font-bold">RD${format(subtotal)}</span>
+
+            <div className="w-[40%] flex flex-col gap-3">
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Subtotal</span>
+                    <span className="font-bold text-gray-800">RD$ {format(subtotal)}</span>
                 </div>
-                <div className="flex justify-between mb-2 items-center">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="flex justify-between items-center text-sm">
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-gray-600">
                         {!isExporting ? (
                             <input type="checkbox" checked={data.useItbis} onChange={(e) => setData({...data, useItbis: e.target.checked})} className="accent-[#303F1D] w-4 h-4" />
-                        ) : (data.useItbis && <span className="text-xs font-bold">✓</span>)}
-                        <span className="text-gray-600">ITBIS (18%)</span>
+                        ) : (data.useItbis && <span className="text-[#303F1D] font-bold">✓</span>)}
+                        ITBIS (18%)
                     </label>
-                    <span className="font-bold">RD${format(itbis)}</span>
+                    <span className="font-bold text-gray-800">RD$ {format(itbis)}</span>
                 </div>
-                <div className="flex justify-between bg-[#303F1D] p-3 font-bold rounded text-white shadow-md">
-                    <span>TOTAL NETO</span>
-                    <span>RD${format(total)}</span>
+                <div className="flex justify-between items-center bg-[#303F1D] text-white p-4 rounded shadow-lg mt-2">
+                    <span className="font-bold text-lg">TOTAL NETO</span>
+                    <span className="font-bold text-2xl">RD$ {format(total)}</span>
                 </div>
             </div>
          </div>
 
-         {/* FOOTER DATA */}
-         <div className="mt-auto pt-12 text-black break-inside-avoid">
-            <div className="font-bold text-sm mb-2 text-[#303F1D]">Observaciones y Notas:</div>
-            <textarea 
-                className="w-full min-h-[80px] rounded-lg p-3 text-sm bg-white/50 border border-[#dcd7d0] outline-none resize-none focus:bg-white transition-colors placeholder-gray-400"
-                value={data.notes}
-                onChange={e => setData({...data, notes: e.target.value})}
-                placeholder="Escriba condiciones, tiempos de entrega o notas adicionales aquí..."
-            />
-
-            <div className="flex justify-between items-end mt-8 gap-8">
-                <div className="flex-1 text-xs leading-relaxed text-gray-600">
-                    <strong className="text-sm block mb-1 text-[#303F1D]">Método de Pago:</strong>
-                    <input className="input-ghost block w-full font-bold bg-transparent border-none outline-none mb-1" value={data.bankOwner} onChange={e => setData({...data, bankOwner: e.target.value})} />
-                    <input className="input-ghost block w-full bg-transparent border-none outline-none mb-1" value={data.bankAccount} onChange={e => setData({...data, bankAccount: e.target.value})} />
-                    <input className="input-ghost block w-full bg-transparent border-none outline-none" value={data.bankName} onChange={e => setData({...data, bankName: e.target.value})} />
+         {/* PAYMENT & SIGNATURE */}
+         <div className="mt-auto pt-8 break-inside-avoid">
+            <div className="flex justify-between items-end gap-12">
+                
+                {/* Info Bancaria */}
+                <div className="flex-1">
+                    <div className="text-[10px] font-bold text-[#303F1D] uppercase tracking-wider mb-2 border-b border-gray-300 pb-1 w-max">Método de Pago</div>
+                    <div className="text-xs text-gray-700 space-y-1">
+                        <RenderField className="font-bold w-full bg-transparent outline-none" value={data.bankOwner} onChange={e => setData({...data, bankOwner: e.target.value})} />
+                        <RenderField className="w-full bg-transparent outline-none" value={data.bankName} onChange={e => setData({...data, bankName: e.target.value})} />
+                        <RenderField className="font-mono w-full bg-transparent outline-none" value={data.bankAccount} onChange={e => setData({...data, bankAccount: e.target.value})} />
+                    </div>
                 </div>
 
-                <div className="w-64 text-center text-[#303F1D]">
-                    <div className="font-bold text-[10px] tracking-[0.2em] mb-12 uppercase text-gray-400">AUTORIZADO POR:</div>
+                {/* Firma */}
+                <div className="w-64 text-center">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-widest mb-12">Autorizado Por</div>
                     <div className="border-b-2 border-[#303F1D] mb-2 w-full"></div>
-                    <div className="font-bold text-sm uppercase tracking-wide">{userData.displayName}</div>
-                    <div className="text-xs opacity-80">{userData.title}</div>
+                    <div className="font-bold text-[#303F1D] uppercase text-sm">{userData.displayName}</div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">{userData.title}</div>
                 </div>
             </div>
          </div>
       </div>
 
       {/* FOOTER BAR */}
-      <footer className="bg-[#303F1D] p-8 flex justify-between items-center text-white mt-auto">
-         <div className="flex items-center gap-4">
-             <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+      <footer className="bg-[#303F1D] px-12 py-6 flex justify-between items-center text-white mt-auto relative overflow-hidden">
+         {/* Decorative Element */}
+         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 pointer-events-none"></div>
+
+         <div className="flex items-center gap-4 relative z-10">
+             <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center text-white/80">
                  <i className="fas fa-map-marker-alt text-sm"></i>
              </div>
-             <div className="text-[10px] leading-tight opacity-90">
-                 C/Prolongación A, Edf. 1, Local 1A, Santiago, R.D.<br/>
+             <div className="text-[10px] leading-tight opacity-90 font-light tracking-wide">
+                 Santiago de los Caballeros, R.D.<br/>
                  <span className="font-bold text-white">jir3hrealtygroup@outlook.com</span>
              </div>
          </div>
-         <div className="text-right leading-relaxed opacity-90">
+         <div className="text-right leading-relaxed opacity-90 relative z-10">
              <div className="text-xs font-bold flex items-center justify-end gap-2">
-                 <i className="fab fa-whatsapp"></i> 849.435.2515
+                 <i className="fab fa-whatsapp text-white/70"></i> 849.435.2515
              </div>
-             <div className="text-xs font-bold">829.344.9793</div>
-             <div className="text-xs font-bold flex items-center justify-end gap-1">
-                 <span className="bg-white/20 px-1 rounded text-[9px]">US</span> 954.319.4663
+             <div className="text-xs font-bold text-white/80">829.344.9793</div>
+             <div className="text-xs font-bold flex items-center justify-end gap-1 text-white/80">
+                 <span className="bg-white/20 px-1 rounded text-[9px] mr-1">US</span> 954.319.4663
              </div>
          </div>
       </footer>
