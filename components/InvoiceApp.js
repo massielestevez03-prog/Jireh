@@ -1,27 +1,25 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { signOut } from 'firebase/auth';
 import { updateDoc, doc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import AdminPanel from './AdminPanel';
 import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf'; // Asegúrate de tener instalado jspdf: npm install jspdf
+import jsPDF from 'jspdf';
 
 const InvoiceApp = ({ user, userData }) => {
   // --- ESTADOS DE DATOS ---
+  // Iniciamos con strings vacíos para que funcionen los placeholders correctamente
   const [items, setItems] = useState([{ id: 1, desc: '', price: 0, qty: 1 }]);
   
-  // Datos del Cliente separados para mejor control
   const [clientName, setClientName] = useState('');
   const [clientId, setClientId] = useState('');
   const [clientLocation, setClientLocation] = useState('');
   const [clientContact, setClientContact] = useState('');
   
-  // Datos del Proyecto
   const [projectTitle, setProjectTitle] = useState('');
-  const [projectFolio, setProjectFolio] = useState('#ARC-2026-001');
+  const [projectFolio, setProjectFolio] = useState('');
   
-  // Método de Pago (Editable)
   const [bankOwner, setBankOwner] = useState('JIREH REALTY GROUP');
   const [bankAccount, setBankAccount] = useState('000-000000-0 (Corriente)');
   const [bankName, setBankName] = useState('Banco Popular Dominicano');
@@ -33,28 +31,29 @@ const InvoiceApp = ({ user, userData }) => {
 
   // --- AUTO-GUARDADO (Local Storage) ---
   useEffect(() => {
-    // 1. Cargar datos al iniciar
     const savedData = localStorage.getItem('jireh_invoice_data');
     if (savedData) {
-      const parsed = JSON.parse(savedData);
-      setItems(parsed.items || []);
-      setClientName(parsed.clientName || '');
-      setClientId(parsed.clientId || '');
-      setClientLocation(parsed.clientLocation || '');
-      setClientContact(parsed.clientContact || '');
-      setProjectTitle(parsed.projectTitle || '');
-      setProjectFolio(parsed.projectFolio || '');
-      setBankOwner(parsed.bankOwner || 'JIREH REALTY GROUP');
-      setBankAccount(parsed.bankAccount || '000-000000-0 (Corriente)');
-      setBankName(parsed.bankName || 'Banco Popular Dominicano');
-      setNotes(parsed.notes || '');
-      setUseItbis(parsed.useItbis ?? true);
-      setFecha(parsed.fecha || new Date().toISOString().split('T')[0]);
+      try {
+        const parsed = JSON.parse(savedData);
+        if(parsed.items) setItems(parsed.items);
+        // Solo cargar si existen, si no dejar vacío para placeholder
+        if(parsed.clientName) setClientName(parsed.clientName);
+        if(parsed.clientId) setClientId(parsed.clientId);
+        if(parsed.clientLocation) setClientLocation(parsed.clientLocation);
+        if(parsed.clientContact) setClientContact(parsed.clientContact);
+        if(parsed.projectTitle) setProjectTitle(parsed.projectTitle);
+        if(parsed.projectFolio) setProjectFolio(parsed.projectFolio);
+        if(parsed.bankOwner) setBankOwner(parsed.bankOwner);
+        if(parsed.bankAccount) setBankAccount(parsed.bankAccount);
+        if(parsed.bankName) setBankName(parsed.bankName);
+        if(parsed.notes) setNotes(parsed.notes);
+        if(parsed.useItbis !== undefined) setUseItbis(parsed.useItbis);
+        if(parsed.fecha) setFecha(parsed.fecha);
+      } catch(e) { console.error("Error cargando datos", e); }
     }
   }, []);
 
   useEffect(() => {
-    // 2. Guardar datos cada vez que cambien
     const dataToSave = {
       items, clientName, clientId, clientLocation, clientContact,
       projectTitle, projectFolio, bankOwner, bankAccount, bankName,
@@ -70,32 +69,67 @@ const InvoiceApp = ({ user, userData }) => {
   const format = (v) => v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
   // --- ACCIONES ---
+  
+  // 1. Guardar PDF (Impresión Nativa - Mejor Calidad y Paginación)
   const handlePrint = () => {
-    // La mejor forma de que la tabla se divida correctamente en varias páginas
-    // y repita el encabezado es usando la impresión nativa del navegador.
     window.print();
   };
 
+  // 2. Compartir (Generación de Imagen/PDF digital)
   const handleShare = async (formatType) => {
     const element = document.getElementById('invoice-paper');
-    // Generamos imagen de alta calidad
-    const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#f4eee8" });
+    
+    // Configuración clave: onclone permite manipular el DOM clonado antes de la captura
+    // Esto es vital para eliminar el "scale" que usamos para visualizar en celular,
+    // y capturar la hoja en su tamaño real (Grande).
+    const canvas = await html2canvas(element, { 
+        scale: 2, // Mejor resolución
+        useCORS: true, 
+        backgroundColor: "#f4eee8",
+        onclone: (clonedDoc) => {
+            // Buscamos el wrapper que escala la hoja y le quitamos el escalado
+            const wrapper = clonedDoc.getElementById('scale-wrapper');
+            if(wrapper) {
+                wrapper.style.transform = 'none';
+                wrapper.style.margin = '0';
+                wrapper.style.height = 'auto';
+                wrapper.style.overflow = 'visible';
+            }
+            // Aseguramos que la hoja no tenga sombras ni márgenes extraños en la captura
+            const paper = clonedDoc.getElementById('invoice-paper');
+            if(paper) {
+                paper.style.boxShadow = 'none';
+                paper.style.margin = '0';
+            }
+        }
+    });
     
     if (formatType === 'jpg') {
         canvas.toBlob(async (blob) => {
             const file = new File([blob], "cotizacion.jpg", { type: "image/jpeg" });
-            shareFile(file, 'Cotización JIREH', 'Adjunto cotización en imagen.');
+            shareFile(file, 'Cotización JIREH', 'Adjunto imagen de cotización.');
         }, 'image/jpeg', 0.9);
+
     } else if (formatType === 'pdf') {
-        // Generar PDF para compartir
+        // Para compartir PDF digitalmente, creamos un PDF con el tamaño EXACTO de la imagen
+        // Así evitamos que se "comprima" o se estire en una hoja carta si es muy largo.
         const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        const pdf = new jsPDF('p', 'pt', 'letter');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        
+        // Calculamos dimensiones en puntos (pt)
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        
+        // PDF con tamaño personalizado ajustado al contenido
+        const pdf = new jsPDF({
+            orientation: imgWidth > imgHeight ? 'l' : 'p',
+            unit: 'px',
+            format: [imgWidth, imgHeight] 
+        });
+        
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
         const pdfBlob = pdf.output('blob');
         const file = new File([pdfBlob], "cotizacion.pdf", { type: "application/pdf" });
-        shareFile(file, 'Cotización JIREH', 'Adjunto cotización en PDF.');
+        shareFile(file, 'Cotización JIREH', 'Adjunto documento PDF.');
     }
   };
 
@@ -104,24 +138,23 @@ const InvoiceApp = ({ user, userData }) => {
       try {
         await navigator.share({ title, text, files: [file] });
       } catch (err) {
-        console.log("Error al compartir:", err);
+        console.log("Cancelado o error al compartir:", err);
       }
     } else {
-      // Fallback para PC: descargar
       const link = document.createElement('a');
       link.download = file.name;
       link.href = URL.createObjectURL(file);
       link.click();
-      alert("Tu dispositivo no soporta compartir directo. El archivo se ha descargado.");
+      alert("Archivo descargado (Tu dispositivo no soporta compartir directo).");
     }
   };
 
   const clearForm = () => {
-    if(confirm("¿Estás seguro de borrar todos los datos?")) {
+    if(confirm("¿Estás seguro de borrar todos los datos del cliente?")) {
       setItems([{ id: Date.now(), desc: '', price: 0, qty: 1 }]);
       setClientName(''); setClientId(''); setClientLocation(''); setClientContact('');
-      setProjectTitle(''); setNotes('');
-      // No borramos la fecha ni los datos del agente, solo el contenido del cliente
+      setProjectTitle(''); setProjectFolio(''); setNotes('');
+      // Mantenemos fecha y firma
       localStorage.removeItem('jireh_invoice_data'); 
     }
   };
@@ -138,45 +171,67 @@ const InvoiceApp = ({ user, userData }) => {
   return (
     <div className="flex flex-col items-center min-h-screen bg-[#333] pb-32">
       
-      {/* ESTILOS DE IMPRESIÓN (PDF PERFECTO) */}
+      {/* ESTILOS AVANZADOS PARA IMPRESIÓN Y PDF */}
       <style jsx global>{`
         @media print {
-          /* Ocultar interfaz */
+          /* Ocultar interfaz de usuario */
           .no-print, nav, .toolbar-bottom, .admin-modal { display: none !important; }
           
-          /* Configuración Papel */
+          /* Configuración de la hoja física */
           @page { margin: 0; size: letter; }
-          body { background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
           
-          /* Layout Impresión */
-          #app-root { width: 100%; }
+          body { 
+            background: white; 
+            margin: 0; 
+            padding: 0;
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
+          }
+          
+          /* Resetear transformaciones para que ocupe el 100% real del papel */
+          #app-root, #scale-wrapper { 
+            width: 100% !important; 
+            transform: none !important; 
+            margin: 0 !important; 
+            height: auto !important; 
+            overflow: visible !important;
+          }
+          
+          /* Ajustar el contenedor de la factura */
           .invoice-paper {
             width: 100% !important;
             max-width: 100% !important;
             box-shadow: none !important;
-            padding: 40px !important;
+            padding: 40px 50px !important; /* Márgenes internos para impresión */
             margin: 0 !important;
             min-height: 100vh;
           }
 
-          /* Tablas multipágina */
+          /* Configuración de Tablas para saltos de página */
           table { page-break-inside: auto; width: 100%; }
           tr { page-break-inside: avoid; page-break-after: auto; }
-          thead { display: table-header-group; }
+          thead { display: table-header-group; } /* Repite encabezado en nueva hoja */
           tfoot { display: table-footer-group; }
           
-          /* Inputs limpios */
-          input, textarea { border: none !important; background: transparent !important; resize: none; padding: 0 !important; }
-          input::placeholder, textarea::placeholder { color: transparent; }
+          /* Inputs limpios al imprimir */
+          input, textarea { 
+            border: none !important; 
+            background: transparent !important; 
+            resize: none; 
+            padding: 0 !important;
+            overflow: visible; 
+          }
+          /* Ocultar placeholders al imprimir */
+          input::placeholder, textarea::placeholder { color: transparent !important; }
           
-          /* Colores */
-          .bg-primary { background-color: #303F1D !important; color: white !important; print-color-adjust: exact; }
-          .bg-light { background-color: #e9e4dd !important; print-color-adjust: exact; }
+          /* Forzar colores de fondo */
+          .bg-primary { background-color: #303F1D !important; color: white !important; }
+          .bg-light { background-color: #e9e4dd !important; }
         }
 
-        /* Estilos Pantalla */
+        /* Estilos en Pantalla (Modo Edición) */
         .invoice-paper {
-          width: 850px;
+          width: 850px; /* Ancho fijo base */
           min-height: 1100px;
           background-color: #f4eee8;
           color: #303F1D;
@@ -190,23 +245,23 @@ const InvoiceApp = ({ user, userData }) => {
           background: transparent; border: none; outline: none; width: 100%;
           font-family: inherit; color: inherit; padding: 2px 0;
         }
-        .input-ghost::placeholder { color: #aaa; opacity: 0.6; font-style: italic; }
-        .input-ghost:focus { background: rgba(255,255,255,0.5); border-radius: 4px; }
+        .input-ghost::placeholder { color: #999; opacity: 0.7; font-style: italic; font-weight: normal; }
+        .input-ghost:focus { background: rgba(255,255,255,0.5); border-radius: 2px; }
       `}</style>
 
       {/* NAVBAR */}
       <nav className="w-full bg-[#1a2310] text-white p-4 sticky top-0 z-40 flex justify-between items-center shadow-md no-print">
         <div className="font-bold tracking-wider">JIREH SYSTEM</div>
         <div className="flex gap-2">
-          <button onClick={updateProfile} className="bg-[#303F1D] hover:bg-gray-700 px-3 py-1 rounded text-sm flex items-center gap-2 border border-gray-600">
+          <button onClick={updateProfile} className="bg-[#303F1D] hover:bg-gray-700 px-3 py-1 rounded text-sm flex items-center gap-2 border border-gray-600 transition">
             <i className="fas fa-pen"></i> Mi Firma
           </button>
           {userData.role === 'admin' && (
-            <button onClick={() => setShowAdmin(true)} className="bg-orange-600 hover:bg-orange-700 px-3 py-1 rounded text-sm">
+            <button onClick={() => setShowAdmin(true)} className="bg-orange-600 hover:bg-orange-700 px-3 py-1 rounded text-sm transition">
               Admin
             </button>
           )}
-          <button onClick={() => { localStorage.removeItem('jireh_invoice_data'); signOut(auth); }} className="bg-red-700 hover:bg-red-800 px-3 py-1 rounded text-sm">
+          <button onClick={() => { localStorage.removeItem('jireh_invoice_data'); signOut(auth); }} className="bg-red-700 hover:bg-red-800 px-3 py-1 rounded text-sm transition">
             Salir
           </button>
         </div>
@@ -214,9 +269,10 @@ const InvoiceApp = ({ user, userData }) => {
 
       {showAdmin && <div className="admin-modal"><AdminPanel onClose={() => setShowAdmin(false)} /></div>}
 
-      {/* ESCALADOR RESPONSIVE */}
-      <div className="mt-8 mb-8 w-full flex justify-center overflow-hidden">
-        <div className="origin-top scale-[0.42] xs:scale-[0.5] sm:scale-[0.6] md:scale-[0.8] lg:scale-100 transition-transform duration-200">
+      {/* ESCALADOR RESPONSIVE (Zoom automático para móviles) */}
+      <div className="mt-8 mb-8 w-full flex justify-center overflow-visible">
+        {/* Este div escala visualmente en pantalla, pero se anula al imprimir/compartir gracias al ID */}
+        <div id="scale-wrapper" className="origin-top scale-[0.42] xs:scale-[0.5] sm:scale-[0.6] md:scale-[0.8] lg:scale-100 transition-transform duration-200">
           <div id="invoice-paper" className="invoice-paper">
               
               {/* ENCABEZADO */}
@@ -226,7 +282,7 @@ const InvoiceApp = ({ user, userData }) => {
                     <g fill="#FFFFFF">
                         <path d="M519.75,75.5h30.88V35.35c0.78,0.36,1.45,0.57,1.99,0.97c0.27,0.21,0.36,0.75,0.36,1.15c0,5.16,0,10.29,0,15.45v24.87H511.9c0-0.36-0.06-0.72-0.06-1.06c0-8.3,0-16.6,0-24.9c0-0.88,0.27-1.24,1.09-1.45c2.23-0.63,4.47-1.36,6.85-2.08v27.23L519.75,75.5z"/>
                         <text transform="matrix(1 0 0 1 82.1889 80.8513)" fill="#8E8B82" fontFamily="Helvetica, Arial, sans-serif" fontSize="11">Inmobiliaria . Arquitectura . Construcción</text>
-                        {/* Logo Path Simplificado */}
+                        {/* Vectores del Logo */}
                         <path d="M73.5,20.66v13.36c0,4.07-2.14,7.05-7.57,7.05h-6.92V37.5h6.71c3.21,0,4.18-1.54,4.18-3.5V20.66H73.5z"/>
                         <rect x="81.28" y="20.66" width="3.58" height="20.41"/>
                         <path d="M103.81,20.66c4.59,0,6.55,2.85,6.55,6.11c0,3.26-1.2,5.27-4.33,6.13l4.75,8.17h-3.97l-4.65-7.88h-5.32c-0.34,0-0.52,0.16-0.52,0.52v7.39h-3.58v-8.07c0-2.3,0.97-3.24,3.21-3.24h7.96c2.04,0,2.84-1.38,2.84-2.84c0-1.46-0.89-2.69-2.84-2.69h-11.2v-3.6h11.07H103.81z"/>
@@ -246,10 +302,11 @@ const InvoiceApp = ({ user, userData }) => {
                     
                     <div className="border-l-[3px] border-[#303F1D] pl-4 text-sm flex flex-col gap-1">
                       <div className="font-bold mb-1 text-base">DATOS DEL CLIENTE</div>
-                      <input className="input-ghost font-bold text-base" placeholder="Nombre del Cliente / Empresa" value={clientName} onChange={e => setClientName(e.target.value)} />
+                      {/* Inputs separados con Placeholders */}
+                      <input className="input-ghost font-bold text-base" placeholder="Nombre del Cliente / Empresa..." value={clientName} onChange={e => setClientName(e.target.value)} />
                       <input className="input-ghost" placeholder="ID / RNC: 000-00000-0" value={clientId} onChange={e => setClientId(e.target.value)} />
-                      <input className="input-ghost" placeholder="Ubicación del Proyecto" value={clientLocation} onChange={e => setClientLocation(e.target.value)} />
-                      <input className="input-ghost" placeholder="Tel: (809) 000-0000" value={clientContact} onChange={e => setClientContact(e.target.value)} />
+                      <input className="input-ghost" placeholder="Ubicación del Proyecto..." value={clientLocation} onChange={e => setClientLocation(e.target.value)} />
+                      <input className="input-ghost" placeholder="Teléfono / Contacto..." value={clientContact} onChange={e => setClientContact(e.target.value)} />
                     </div>
                   </div>
 
@@ -260,7 +317,7 @@ const InvoiceApp = ({ user, userData }) => {
                       <input className="input-ghost text-right font-normal text-lg" placeholder="NOMBRE DEL PROYECTO" value={projectTitle} onChange={e => setProjectTitle(e.target.value)} />
                     </div>
                     <div className="text-[#8e8b82] text-xs mt-1 flex justify-end items-center gap-1">
-                      FOLIO: <input className="input-ghost w-24 text-right text-[#8e8b82]" value={projectFolio} onChange={e => setProjectFolio(e.target.value)} />
+                      FOLIO: <input className="input-ghost w-32 text-right text-[#8e8b82]" placeholder="#ARC-2026-001" value={projectFolio} onChange={e => setProjectFolio(e.target.value)} />
                     </div>
                   </div>
                 </div>
