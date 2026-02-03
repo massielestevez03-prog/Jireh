@@ -27,11 +27,22 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
   const format = (v) => v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
   // Renderiza un input o texto plano según si se está exportando
-  const RenderField = ({ value, placeholder, onChange, className, style, multiline = false }) => {
+  const RenderField = ({ value, placeholder, onChange, className, style, multiline = false, align = 'left' }) => {
     if (isExporting) {
         return (
-            <div className={`${className} leading-tight`} style={{...style, borderBottom: 'none', background: 'transparent', padding: '2px 0', minHeight: '1.5em'}}>
-                {value || <span className="text-transparent">.</span>} {/* Punto invisible para mantener altura */}
+            <div 
+                className={`${className} leading-tight`} 
+                style={{
+                    ...style, 
+                    borderBottom: 'none', 
+                    background: 'transparent', 
+                    padding: '2px 0', 
+                    minHeight: '1.5em',
+                    textAlign: align,
+                    whiteSpace: 'pre-wrap'
+                }}
+            >
+                {value || <span className="text-transparent">.</span>}
             </div>
         );
     }
@@ -44,7 +55,7 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
                 className={`${className} focus:bg-white/50 transition-colors`} 
                 placeholder={placeholder}
                 rows={1}
-                style={style}
+                style={{...style, textAlign: align}}
                 onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
             />
         );
@@ -56,7 +67,7 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
             onChange={onChange}
             className={`${className} focus:bg-white/50 transition-colors`} 
             placeholder={placeholder} 
-            style={style}
+            style={{...style, textAlign: align}}
         />
     );
   };
@@ -64,14 +75,14 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
   return (
     <div 
       id={id} 
-      className="invoice-paper font-sans relative flex flex-col shadow-xl"
+      className={`invoice-paper font-sans relative flex flex-col ${isExporting ? '' : 'shadow-xl'}`}
       style={{
-        width: '794px', // Ancho exacto A4
-        minHeight: '1123px', // Alto mínimo A4
+        width: '794px',
+        minHeight: '1123px',
         padding: '0',
         margin: '0 auto',
-        backgroundColor: '#f4eee8', // Fondo crema sólido (importante para evitar transparencia)
-        color: '#1a2310', // Texto casi negro para mejor contraste
+        backgroundColor: '#f4eee8',
+        color: '#1a2310',
         lineHeight: '1.2'
       }}
     >
@@ -91,80 +102,85 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
       </div>
 
       <div className="flex-1 flex flex-col px-12 py-8">
-         {/* INFO SECTION - Usamos Grid para evitar superposiciones */}
-         <div className="flex items-start justify-between gap-6 mb-8">
-            
-            {/* Columna Izquierda: Cliente */}
-            <div className="w-[55%] flex flex-col gap-5 pt-2">
-                <div>
-                    <span className="text-xs font-bold block mb-1 uppercase tracking-wider text-[#303F1D]">FECHA DE EMISIÓN</span>
-                    <input 
-                        type="date" 
-                        value={data.fecha} 
-                        onChange={(e) => setData({...data, fecha: e.target.value})} 
-                        className="bg-transparent font-bold text-[#303F1D] text-lg outline-none p-0 border-none" 
-                    />
-                </div>
-                
-                <div className="border-l-[4px] border-[#303F1D] pl-4 flex flex-col gap-2">
-                    <div>
-                        <div className="text-xs font-bold text-[#303F1D] uppercase tracking-wider mb-1">FACTURAR A:</div>
-                        <RenderField 
-                            className="text-xl font-bold w-full bg-transparent border-none outline-none placeholder-gray-400" 
-                            placeholder="Nombre del Cliente..." 
-                            value={data.clientName} 
-                            onChange={e => setData({...data, clientName: e.target.value})} 
-                        />
-                    </div>
-                    
-                    <RenderField 
-                        className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
-                        placeholder="RNC / Cédula" 
-                        value={data.clientId} 
-                        onChange={e => setData({...data, clientId: e.target.value})} 
-                    />
-                    <RenderField 
-                        className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
-                        placeholder="Ubicación / Dirección" 
-                        value={data.clientLocation} 
-                        onChange={e => setData({...data, clientLocation: e.target.value})} 
-                    />
-                    <RenderField 
-                        className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
-                        placeholder="Teléfono / Contacto" 
-                        value={data.clientContact} 
-                        onChange={e => setData({...data, clientContact: e.target.value})} 
-                    />
-                </div>
-            </div>
+         {/* INFO SECTION - Usamos TABLE para estructura rígida a prueba de errores de PDF */}
+         <table className="w-full mb-8 border-collapse" style={{ tableLayout: 'fixed' }}>
+            <tbody>
+                <tr>
+                    {/* Columna Izquierda: Cliente */}
+                    <td className="align-top pr-4" style={{ width: '55%' }}>
+                        <div className="mb-4">
+                            <span className="text-xs font-bold block mb-1 uppercase tracking-wider text-[#303F1D]">FECHA DE EMISIÓN</span>
+                            <input 
+                                type="date" 
+                                value={data.fecha} 
+                                onChange={(e) => setData({...data, fecha: e.target.value})} 
+                                className="bg-transparent font-bold text-[#303F1D] text-lg outline-none p-0 border-none w-full" 
+                            />
+                        </div>
+                        
+                        <div className="border-l-[4px] border-[#303F1D] pl-4 flex flex-col gap-2">
+                            <div>
+                                <div className="text-xs font-bold text-[#303F1D] uppercase tracking-wider mb-1">FACTURAR A:</div>
+                                <RenderField 
+                                    className="text-xl font-bold w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                                    placeholder="Nombre del Cliente..." 
+                                    value={data.clientName} 
+                                    onChange={e => setData({...data, clientName: e.target.value})} 
+                                />
+                            </div>
+                            
+                            <RenderField 
+                                className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                                placeholder="RNC / Cédula" 
+                                value={data.clientId} 
+                                onChange={e => setData({...data, clientId: e.target.value})} 
+                            />
+                            <RenderField 
+                                className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                                placeholder="Ubicación / Dirección" 
+                                value={data.clientLocation} 
+                                onChange={e => setData({...data, clientLocation: e.target.value})} 
+                            />
+                            <RenderField 
+                                className="text-sm w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                                placeholder="Teléfono / Contacto" 
+                                value={data.clientContact} 
+                                onChange={e => setData({...data, clientContact: e.target.value})} 
+                            />
+                        </div>
+                    </td>
 
-            {/* Columna Derecha: Título y Folio */}
-            <div className="w-[45%] text-right pt-2">
-                <h2 className="text-[42px] leading-none text-[#303F1D] uppercase font-light m-0">Cotización</h2>
-                
-                <div className="mt-6 flex flex-col items-end gap-1">
-                    <span className="font-bold text-xs uppercase tracking-wider text-[#303F1D]">PROYECTO</span>
-                    <RenderField 
-                        className="text-right font-bold text-lg w-full bg-transparent border-none outline-none placeholder-gray-400" 
-                        placeholder="NOMBRE DEL PROYECTO" 
-                        value={data.projectTitle} 
-                        onChange={e => setData({...data, projectTitle: e.target.value})} 
-                    />
-                </div>
-                
-                <div className="mt-2 flex justify-end items-center gap-2">
-                     <span className="text-[#8e8b82] text-xs font-bold">FOLIO:</span>
-                     <RenderField 
-                        className="w-32 text-right text-[#8e8b82] font-mono text-sm bg-transparent border-none outline-none placeholder-gray-300" 
-                        placeholder="#001" 
-                        value={data.projectFolio} 
-                        onChange={e => setData({...data, projectFolio: e.target.value})} 
-                    />
-                </div>
-            </div>
-         </div>
+                    {/* Columna Derecha: Título y Folio */}
+                    <td className="align-top text-right" style={{ width: '45%' }}>
+                        <h2 className="text-[42px] leading-none text-[#303F1D] uppercase font-light m-0">Cotización</h2>
+                        
+                        <div className="mt-6 flex flex-col items-end gap-1">
+                            <span className="font-bold text-xs uppercase tracking-wider text-[#303F1D]">PROYECTO</span>
+                            <RenderField 
+                                className="text-right font-bold text-lg w-full bg-transparent border-none outline-none placeholder-gray-400" 
+                                placeholder="NOMBRE DEL PROYECTO" 
+                                align="right"
+                                value={data.projectTitle} 
+                                onChange={e => setData({...data, projectTitle: e.target.value})} 
+                            />
+                        </div>
+                        
+                        <div className="mt-2 flex justify-end items-center gap-2">
+                            <span className="text-[#8e8b82] text-xs font-bold whitespace-nowrap">FOLIO:</span>
+                            <RenderField 
+                                className="w-32 text-right text-[#8e8b82] font-mono text-sm bg-transparent border-none outline-none placeholder-gray-300" 
+                                placeholder="#001" 
+                                align="right"
+                                value={data.projectFolio} 
+                                onChange={e => setData({...data, projectFolio: e.target.value})} 
+                            />
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+         </table>
 
-         {/* TABLE */}
+         {/* ITEM TABLE */}
          <div className="mt-4">
             <table className="w-full border-collapse table-fixed">
                 <thead>
@@ -204,6 +220,7 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
                                         type="number" 
                                         className="w-full text-right bg-transparent border-none outline-none placeholder-gray-300" 
                                         placeholder="0.00"
+                                        align="right"
                                         value={item.price || ''} 
                                         onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value) || 0)} 
                                     />
@@ -214,6 +231,7 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
                                     type="number" 
                                     className="w-full text-center bg-transparent border-none outline-none placeholder-gray-300" 
                                     placeholder="1"
+                                    align="center"
                                     value={item.qty || ''} 
                                     onChange={(e) => updateItem(index, 'qty', parseFloat(e.target.value) || 0)} 
                                 />
@@ -233,62 +251,67 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
             )}
          </div>
 
-         {/* TOTALS & FOOTER - Usamos flex-col-reverse para que los totales queden arriba en movil pero aqui es A4 */}
-         <div className="flex justify-between mt-12 mb-8 break-inside-avoid">
-            <div className="w-[55%] pr-8">
-                <div className="text-xs font-bold text-[#303F1D] uppercase tracking-wider mb-2 border-b border-[#303F1D] pb-1">Observaciones</div>
-                <RenderField 
-                    multiline
-                    className="w-full min-h-[100px] text-sm bg-[#fcfaf8] border border-[#e5e0d8] p-3 rounded outline-none resize-none placeholder-gray-400 text-gray-700 leading-relaxed"
-                    value={data.notes}
-                    onChange={e => setData({...data, notes: e.target.value})}
-                    placeholder="Escriba aquí notas importantes, condiciones de pago, tiempo de entrega..."
-                />
-            </div>
+         {/* TOTALS & NOTES TABLE */}
+         <table className="w-full mt-12 mb-8 break-inside-avoid" style={{ tableLayout: 'fixed' }}>
+            <tbody>
+                <tr>
+                    <td className="align-top pr-8" style={{ width: '55%' }}>
+                        <div className="text-xs font-bold text-[#303F1D] uppercase tracking-wider mb-2 border-b border-[#303F1D] pb-1">Observaciones</div>
+                        <RenderField 
+                            multiline
+                            className="w-full min-h-[100px] text-sm bg-[#fcfaf8] border border-[#e5e0d8] p-3 rounded outline-none resize-none placeholder-gray-400 text-gray-700 leading-relaxed"
+                            value={data.notes}
+                            onChange={e => setData({...data, notes: e.target.value})}
+                            placeholder="Escriba aquí notas importantes, condiciones de pago, tiempo de entrega..."
+                        />
+                    </td>
+                    <td className="align-top" style={{ width: '45%' }}>
+                         <div className="flex flex-col gap-3">
+                            <div className="flex justify-between items-center text-sm text-gray-600">
+                                <span>Subtotal</span>
+                                <span className="font-bold text-gray-800">RD$ {format(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                                <label className="flex items-center gap-2 cursor-pointer select-none text-gray-600">
+                                    {!isExporting ? (
+                                        <input type="checkbox" checked={data.useItbis} onChange={(e) => setData({...data, useItbis: e.target.checked})} className="accent-[#303F1D] w-4 h-4" />
+                                    ) : (data.useItbis && <span className="text-[#303F1D] font-bold">✓</span>)}
+                                    ITBIS (18%)
+                                </label>
+                                <span className="font-bold text-gray-800">RD$ {format(itbis)}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-[#303F1D] text-white p-4 rounded shadow-lg mt-2">
+                                <span className="font-bold text-lg">TOTAL NETO</span>
+                                <span className="font-bold text-2xl">RD$ {format(total)}</span>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+         </table>
 
-            <div className="w-[40%] flex flex-col gap-3">
-                <div className="flex justify-between items-center text-sm text-gray-600">
-                    <span>Subtotal</span>
-                    <span className="font-bold text-gray-800">RD$ {format(subtotal)}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                    <label className="flex items-center gap-2 cursor-pointer select-none text-gray-600">
-                        {!isExporting ? (
-                            <input type="checkbox" checked={data.useItbis} onChange={(e) => setData({...data, useItbis: e.target.checked})} className="accent-[#303F1D] w-4 h-4" />
-                        ) : (data.useItbis && <span className="text-[#303F1D] font-bold">✓</span>)}
-                        ITBIS (18%)
-                    </label>
-                    <span className="font-bold text-gray-800">RD$ {format(itbis)}</span>
-                </div>
-                <div className="flex justify-between items-center bg-[#303F1D] text-white p-4 rounded shadow-lg mt-2">
-                    <span className="font-bold text-lg">TOTAL NETO</span>
-                    <span className="font-bold text-2xl">RD$ {format(total)}</span>
-                </div>
-            </div>
-         </div>
-
-         {/* PAYMENT & SIGNATURE */}
+         {/* FOOTER INFO TABLE */}
          <div className="mt-auto pt-8 break-inside-avoid">
-            <div className="flex justify-between items-end gap-12">
-                
-                {/* Info Bancaria */}
-                <div className="flex-1">
-                    <div className="text-[10px] font-bold text-[#303F1D] uppercase tracking-wider mb-2 border-b border-gray-300 pb-1 w-max">Método de Pago</div>
-                    <div className="text-xs text-gray-700 space-y-1">
-                        <RenderField className="font-bold w-full bg-transparent outline-none" value={data.bankOwner} onChange={e => setData({...data, bankOwner: e.target.value})} />
-                        <RenderField className="w-full bg-transparent outline-none" value={data.bankName} onChange={e => setData({...data, bankName: e.target.value})} />
-                        <RenderField className="font-mono w-full bg-transparent outline-none" value={data.bankAccount} onChange={e => setData({...data, bankAccount: e.target.value})} />
-                    </div>
-                </div>
-
-                {/* Firma */}
-                <div className="w-64 text-center">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-widest mb-12">Autorizado Por</div>
-                    <div className="border-b-2 border-[#303F1D] mb-2 w-full"></div>
-                    <div className="font-bold text-[#303F1D] uppercase text-sm">{userData.displayName}</div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">{userData.title}</div>
-                </div>
-            </div>
+            <table className="w-full" style={{ tableLayout: 'fixed' }}>
+                <tbody>
+                    <tr>
+                         <td className="align-bottom" style={{ width: '60%' }}>
+                            <div className="text-[10px] font-bold text-[#303F1D] uppercase tracking-wider mb-2 border-b border-gray-300 pb-1 w-max">Método de Pago</div>
+                            <div className="text-xs text-gray-700 space-y-1">
+                                <RenderField className="font-bold w-full bg-transparent outline-none" value={data.bankOwner} onChange={e => setData({...data, bankOwner: e.target.value})} />
+                                <RenderField className="w-full bg-transparent outline-none" value={data.bankName} onChange={e => setData({...data, bankName: e.target.value})} />
+                                <RenderField className="font-mono w-full bg-transparent outline-none" value={data.bankAccount} onChange={e => setData({...data, bankAccount: e.target.value})} />
+                            </div>
+                         </td>
+                         <td className="align-bottom text-center pl-8" style={{ width: '40%' }}>
+                            <div className="text-[10px] text-gray-400 uppercase tracking-widest mb-12">Autorizado Por</div>
+                            <div className="border-b-2 border-[#303F1D] mb-2 w-full"></div>
+                            <div className="font-bold text-[#303F1D] uppercase text-sm">{userData.displayName}</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider">{userData.title}</div>
+                         </td>
+                    </tr>
+                </tbody>
+            </table>
          </div>
       </div>
 
