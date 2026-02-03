@@ -14,7 +14,7 @@ const AdminPanel = ({ onClose }) => {
           const snapshot = await getDocs(q);
           setUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (e) {
-          console.error("Error fetching users:", e);
+          console.error("Error cargando usuarios:", e);
       }
       setLoading(false);
     };
@@ -29,13 +29,13 @@ const AdminPanel = ({ onClose }) => {
   return (
     <div className="h-full flex flex-col bg-white">
         <div className="bg-[#303F1D] p-4 text-white flex justify-between items-center">
-          <h2 className="font-bold text-lg">Panel de Administración</h2>
+          <h2 className="font-bold text-lg">Administración de Usuarios</h2>
           <button onClick={onClose} className="text-white hover:text-gray-300 text-xl font-bold">&times;</button>
         </div>
         <div className="p-6 overflow-y-auto flex-1">
           {loading ? (
               <div className="flex items-center justify-center h-40">
-                  <span className="text-gray-500 animate-pulse">Cargando usuarios...</span>
+                  <span className="text-gray-500 animate-pulse">Cargando...</span>
               </div>
           ) : (
             <div className="overflow-x-auto">
@@ -66,9 +66,6 @@ const AdminPanel = ({ onClose }) => {
                         </td>
                     </tr>
                     ))}
-                    {users.length === 0 && (
-                        <tr><td colSpan="3" className="text-center py-8 text-gray-400">No hay usuarios registrados.</td></tr>
-                    )}
                 </tbody>
                 </table>
             </div>
