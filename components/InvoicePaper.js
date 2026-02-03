@@ -1,4 +1,4 @@
-mport React from 'react';
+import React from 'react';
 
 // Editor Visual (Lo que ves en pantalla para trabajar)
 // NOTA: Este componente ahora es SOLO para editar. El PDF se genera "dibujando" en InvoiceApp.js
