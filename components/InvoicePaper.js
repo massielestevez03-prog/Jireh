@@ -1,7 +1,8 @@
-import React from 'react';
+mport React from 'react';
 
 // Editor Visual (Lo que ves en pantalla para trabajar)
-const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
+// NOTA: Este componente ahora es SOLO para editar. El PDF se genera "dibujando" en InvoiceApp.js
+const InvoicePaper = ({ id, data, setData, userData }) => {
   
   // Helpers
   const updateItem = (index, field, value) => {
@@ -37,7 +38,7 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
         lineHeight: '1.2'
       }}
     >
-      {/* HEADER SVG (Visual) */}
+      {/* HEADER SVG (Solo Visual) */}
       <div className="w-full bg-[#303F1D]">
         <svg viewBox="0 0 612 95.04" className="w-full block" style={{ shapeRendering: 'geometricPrecision' }}>
             <rect fill="#303F1D" width="612" height="95.04"/>
@@ -97,9 +98,7 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
             {data.items.map((item, index) => (
                 <div key={item.id} className="flex border-b border-[#dcd7d0] py-3 text-sm group relative">
                     <div className="w-[8%] font-bold text-gray-500 relative">
-                        {isExporting ? null : (
-                            <button onClick={() => removeItem(item.id)} className="absolute -left-5 text-red-400 hover:text-red-600 font-bold px-1 opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-                        )}
+                        <button onClick={() => removeItem(item.id)} className="absolute -left-5 text-red-400 hover:text-red-600 font-bold px-1 opacity-0 group-hover:opacity-100 transition-opacity">×</button>
                         {(index + 1).toString().padStart(2, '0')}
                     </div>
                     <div className="w-[52%] pr-2">
@@ -124,11 +123,9 @@ const InvoicePaper = ({ id, data, setData, userData, isExporting = false }) => {
                 </div>
             ))}
 
-            {!isExporting && (
-                <button onClick={addItem} className="w-full py-2 mt-2 text-xs font-bold text-[#303F1D] border border-dashed border-[#303F1D]/40 rounded hover:bg-[#303F1D]/5 transition uppercase tracking-wider">
-                    + Agregar Concepto
-                </button>
-            )}
+            <button onClick={addItem} className="w-full py-2 mt-2 text-xs font-bold text-[#303F1D] border border-dashed border-[#303F1D]/40 rounded hover:bg-[#303F1D]/5 transition uppercase tracking-wider">
+                + Agregar Concepto
+            </button>
          </div>
 
          <div className="flex justify-between mt-12 mb-8">
