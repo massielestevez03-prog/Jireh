@@ -24,7 +24,7 @@ const InvoiceApp = ({ user, userData }) => {
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '' });
   const [inputValue, setInputValue] = useState('');
   const [isExporting, setIsExporting] = useState(false);
-  const [showShareMenu, setShowShareMenu] = useState(false); // Nuevo estado para menú compartir
+  const [showShareMenu, setShowShareMenu] = useState(false);
 
   // --- AUTO-GUARDADO ---
   useEffect(() => {
@@ -239,8 +239,7 @@ const InvoiceApp = ({ user, userData }) => {
     const notesLines = doc.splitTextToSize(data.notes || "Sin observaciones adicionales.", 90);
     doc.text(notesLines, 20, notesY + 5);
 
-    // --- PIE DE PÁGINA (Ajustado) ---
-    // Subimos la firma a 210mm (antes 225mm) para evitar que se vea "baja"
+    // --- PIE DE PÁGINA ---
     const FOOTER_START_Y = 210; 
 
     // Verificamos espacio
@@ -302,106 +301,143 @@ const InvoiceApp = ({ user, userData }) => {
     return doc;
   };
 
-  // --- GENERACIÓN IMAGEN NATIVA (Canvas API) ---
-  // Dibuja la factura en un canvas HTML invisible con alta resolución
-  // Esto reemplaza a html2canvas y evita distorsiones
-  const generateNativeImage = () => {
+  // --- GENERACIÓN IMAGENES NATIVAS (Canvas API - Multi-Página) ---
+  const generateNativeImages = async () => {
+    // Retorna una Promesa que resuelve a un ARRAY de DataURLs (una por página)
     return new Promise((resolve, reject) => {
         try {
-            const canvas = document.createElement('canvas');
-            // Escala 5x para alta calidad (A4 @ ~125DPI)
-            const SCALE = 5;
-            const WIDTH = 210 * SCALE;  // 1050px
-            const HEIGHT = 297 * SCALE; // 1485px
+            const pages = []; // Aquí guardaremos cada página (imagen)
             
-            canvas.width = WIDTH;
-            canvas.height = HEIGHT;
-            const ctx = canvas.getContext('2d');
+            const SCALE = 3; // Calidad de imagen (3x)
+            const WIDTH = 210 * SCALE;
+            const HEIGHT = 297 * SCALE;
+            const s = (val) => val * SCALE; // helper escalado
+
+            // Helpers de dibujo reutilizables
+            const drawBackground = (ctx) => {
+                ctx.fillStyle = COLOR_BG;
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            };
+
+            const drawFooterBar = (ctx) => {
+                 ctx.fillStyle = COLOR_PRIMARY;
+                 ctx.fillRect(0, s(275), WIDTH, s(22));
+                 ctx.textAlign = "left";
+                 ctx.fillStyle = "#FFFFFF";
+                 ctx.font = `normal ${s(8/3)}px Helvetica`;
+                 ctx.fillText("Santiago de los Caballeros, R.D.", s(30), s(282));
+                 ctx.font = `bold ${s(8/3)}px Helvetica`;
+                 ctx.fillText("jir3hrealtygroup@outlook.com", s(30), s(286));
+            };
+
+            const drawHeader = (ctx) => {
+                ctx.fillStyle = COLOR_PRIMARY;
+                ctx.fillRect(0, 0, WIDTH, s(35));
+                ctx.fillStyle = "#FFFFFF";
+                ctx.font = `bold ${s(24/3)}px Helvetica, Arial, sans-serif`;
+                ctx.fillText("JIREH", s(20), s(22));
+                ctx.font = `normal ${s(8/3)}px Helvetica, Arial, sans-serif`;
+                ctx.fillText("SYSTEM", s(20), s(26));
+                ctx.fillStyle = "#C8C8C8";
+                ctx.fillText("Inmobiliaria . Arquitectura . Construcción", s(20), s(31));
+            };
+
+            const drawClientInfo = (ctx) => {
+                let y = 50;
+                ctx.fillStyle = COLOR_PRIMARY;
+                ctx.font = `bold ${s(9/3)}px Helvetica`;
+                ctx.fillText("FECHA DE EMISIÓN", s(20), s(y));
+                ctx.font = `normal ${s(12/3)}px Helvetica`;
+                ctx.fillText(data.fecha || "---", s(20), s(y+6));
+    
+                y += 18;
+                ctx.beginPath(); ctx.strokeStyle = COLOR_PRIMARY; ctx.lineWidth = s(1);
+                ctx.moveTo(s(20), s(y)); ctx.lineTo(s(20), s(y+35)); ctx.stroke();
+    
+                ctx.font = `bold ${s(9/3)}px Helvetica`;
+                ctx.fillText("FACTURAR A:", s(24), s(y+3));
+                ctx.font = `bold ${s(12/3)}px Helvetica`;
+                ctx.fillText(data.clientName || "Cliente Mostrador", s(24), s(y+9));
+                
+                ctx.fillStyle = COLOR_TEXT;
+                ctx.font = `normal ${s(10/3)}px Helvetica`;
+                ctx.fillText(data.clientId || "", s(24), s(y+15));
+                ctx.fillText(data.clientLocation || "", s(24), s(y+20));
+                ctx.fillText(data.clientContact || "", s(24), s(y+25));
+
+                // Titulo Derecha
+                ctx.textAlign = "right";
+                ctx.fillStyle = COLOR_PRIMARY;
+                ctx.font = `normal ${s(32/3)}px Helvetica`;
+                ctx.fillText("COTIZACIÓN", s(190), s(60));
+    
+                ctx.font = `bold ${s(9/3)}px Helvetica`;
+                ctx.fillText("PROYECTO", s(190), s(75));
+                ctx.font = `normal ${s(12/3)}px Helvetica`;
+                ctx.fillText(data.projectTitle || "---", s(190), s(81));
+    
+                ctx.fillStyle = COLOR_GRAY;
+                ctx.font = `normal ${s(10/3)}px Helvetica`;
+                ctx.fillText(`FOLIO: ${data.projectFolio || "001"}`, s(190), s(88));
+                ctx.textAlign = "left"; 
+            }
+
+            const drawTableHeader = (ctx, y) => {
+                 ctx.fillStyle = COLOR_PRIMARY;
+                 ctx.fillRect(s(20), s(y-8), s(170), s(8));
+                 ctx.fillStyle = "#FFFFFF";
+                 ctx.font = `bold ${s(8/3)}px Helvetica`;
+                 ctx.fillText("NO.", s(23), s(y - 2.5));
+                 ctx.fillText("DESCRIPCIÓN", s(40), s(y - 2.5));
+                 ctx.textAlign = "right"; ctx.fillText("PRECIO", s(145), s(y - 2.5));
+                 ctx.textAlign = "center"; ctx.fillText("CANT.", s(160), s(y - 2.5));
+                 ctx.textAlign = "right"; ctx.fillText("TOTAL", s(187), s(y - 2.5));
+                 ctx.textAlign = "left";
+            }
+
+            // --- INICIO DIBUJO PAGINADO ---
+            let canvas = document.createElement('canvas');
+            canvas.width = WIDTH; canvas.height = HEIGHT;
+            let ctx = canvas.getContext('2d');
+
+            // Pagina 1 Inicialización
+            drawBackground(ctx);
+            drawHeader(ctx);
+            drawClientInfo(ctx);
             
-            // Helpers de escalado
-            const s = (val) => val * SCALE;
-            
-            // FONDO
-            ctx.fillStyle = COLOR_BG;
-            ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-            // HEADER
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.fillRect(0, 0, WIDTH, s(35));
-
-            // Logo
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = `bold ${s(24/3)}px Helvetica, Arial, sans-serif`; // Ajuste aprox de tamaño pt a px
-            ctx.fillText("JIREH", s(20), s(22));
-            ctx.font = `normal ${s(8/3)}px Helvetica, Arial, sans-serif`;
-            ctx.fillText("SYSTEM", s(20), s(26));
-            ctx.fillStyle = "#C8C8C8";
-            ctx.fillText("Inmobiliaria . Arquitectura . Construcción", s(20), s(31));
-
-            // INFO CLIENTE
-            let y = 50;
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.font = `bold ${s(9/3)}px Helvetica`;
-            ctx.fillText("FECHA DE EMISIÓN", s(20), s(y));
-            ctx.font = `normal ${s(12/3)}px Helvetica`;
-            ctx.fillText(data.fecha || "---", s(20), s(y+6));
-
-            y += 18;
-            ctx.beginPath();
-            ctx.strokeStyle = COLOR_PRIMARY;
-            ctx.lineWidth = s(1);
-            ctx.moveTo(s(20), s(y));
-            ctx.lineTo(s(20), s(y+35));
-            ctx.stroke();
-
-            ctx.font = `bold ${s(9/3)}px Helvetica`;
-            ctx.fillText("FACTURAR A:", s(24), s(y+3));
-            ctx.font = `bold ${s(12/3)}px Helvetica`;
-            ctx.fillText(data.clientName || "Cliente Mostrador", s(24), s(y+9));
-            
-            ctx.fillStyle = COLOR_TEXT;
-            ctx.font = `normal ${s(10/3)}px Helvetica`;
-            ctx.fillText(data.clientId || "", s(24), s(y+15));
-            ctx.fillText(data.clientLocation || "", s(24), s(y+20));
-            ctx.fillText(data.clientContact || "", s(24), s(y+25));
-
-            // TITULO DERECHA
-            ctx.textAlign = "right";
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.font = `normal ${s(32/3)}px Helvetica`;
-            ctx.fillText("COTIZACIÓN", s(190), s(60));
-
-            ctx.font = `bold ${s(9/3)}px Helvetica`;
-            ctx.fillText("PROYECTO", s(190), s(75));
-            ctx.font = `normal ${s(12/3)}px Helvetica`;
-            ctx.fillText(data.projectTitle || "---", s(190), s(81));
-
-            ctx.fillStyle = COLOR_GRAY;
-            ctx.font = `normal ${s(10/3)}px Helvetica`;
-            ctx.fillText(`FOLIO: ${data.projectFolio || "001"}`, s(190), s(88));
-            ctx.textAlign = "left"; // Reset
-
-            // TABLA
             const startY = 105;
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.fillRect(s(20), s(startY-8), s(170), s(8)); // Header bg (ajustado coords)
-            
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = `bold ${s(8/3)}px Helvetica`;
-            ctx.fillText("NO.", s(23), s(startY - 2.5));
-            ctx.fillText("DESCRIPCIÓN", s(40), s(startY - 2.5));
-            ctx.textAlign = "right";
-            ctx.fillText("PRECIO", s(145), s(startY - 2.5));
-            ctx.textAlign = "center";
-            ctx.fillText("CANT.", s(160), s(startY - 2.5));
-            ctx.textAlign = "right";
-            ctx.fillText("TOTAL", s(187), s(startY - 2.5));
-            ctx.textAlign = "left";
+            drawTableHeader(ctx, startY);
+            let currentY = startY + 6;
 
-            // Items
-            let currentY = startY + 6; // offset inicial
-            
+            // Función para cambiar de página
+            const nextPage = () => {
+                // Cerrar página actual
+                drawFooterBar(ctx);
+                pages.push(canvas.toDataURL('image/jpeg', 0.9));
+
+                // Nueva página
+                canvas = document.createElement('canvas');
+                canvas.width = WIDTH; canvas.height = HEIGHT;
+                ctx = canvas.getContext('2d');
+                drawBackground(ctx);
+                
+                // Header repetido (opcional, solo fondo verde o logo)
+                ctx.fillStyle = COLOR_PRIMARY;
+                ctx.fillRect(0, 0, WIDTH, s(35)); // Header simple en pags siguientes
+                
+                // Tabla Header en nueva posición
+                const newY = 40;
+                drawTableHeader(ctx, newY);
+                return newY + 6;
+            };
+
+            // Iterar Items
             data.items.forEach((item, index) => {
+                // Verificar límite (aprox 230mm)
+                if (currentY > 230) {
+                    currentY = nextPage();
+                }
+
                 const totalLine = (item.price * item.qty);
                 ctx.fillStyle = COLOR_TEXT;
                 ctx.font = `normal ${s(9/3)}px Helvetica`;
@@ -419,17 +455,15 @@ const InvoiceApp = ({ user, userData }) => {
                 ctx.fillText(formatMoney(totalLine), s(187), s(currentY));
                 ctx.textAlign = "left";
 
-                ctx.beginPath();
-                ctx.strokeStyle = "#DCDCDC";
-                ctx.lineWidth = s(0.5);
-                ctx.moveTo(s(20), s(currentY + 4));
-                ctx.lineTo(s(190), s(currentY + 4));
-                ctx.stroke();
+                ctx.beginPath(); ctx.strokeStyle = "#DCDCDC"; ctx.lineWidth = s(0.5);
+                ctx.moveTo(s(20), s(currentY + 4)); ctx.lineTo(s(190), s(currentY + 4)); ctx.stroke();
 
-                currentY += 12; // Espacio fijo simple para imagen (aprox)
+                currentY += 12; 
             });
 
-            // TOTALES
+            // Totales
+            if (currentY > 190) { currentY = nextPage(); }
+            
             const subtotal = data.items.reduce((acc, i) => acc + (i.price * i.qty), 0);
             const itbis = data.useItbis ? subtotal * 0.18 : 0;
             const total = subtotal + itbis;
@@ -439,85 +473,57 @@ const InvoiceApp = ({ user, userData }) => {
             ctx.fillStyle = COLOR_TEXT;
             ctx.font = `normal ${s(10/3)}px Helvetica`;
             ctx.fillText("Subtotal:", s(totalsX), s(totalsY));
-            ctx.textAlign = "right";
-            ctx.fillText(formatMoney(subtotal), s(190), s(totalsY));
+            ctx.textAlign = "right"; ctx.fillText(formatMoney(subtotal), s(190), s(totalsY));
             
-            ctx.textAlign = "left";
-            ctx.fillText(data.useItbis ? "ITBIS (18%):" : "ITBIS (0%):", s(totalsX), s(totalsY + 6));
-            ctx.textAlign = "right";
-            ctx.fillText(formatMoney(itbis), s(190), s(totalsY + 6));
+            ctx.textAlign = "left"; ctx.fillText(data.useItbis ? "ITBIS (18%):" : "ITBIS (0%):", s(totalsX), s(totalsY + 6));
+            ctx.textAlign = "right"; ctx.fillText(formatMoney(itbis), s(190), s(totalsY + 6));
             
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.fillRect(s(totalsX - 5), s(totalsY + 10), s(70), s(12));
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = `bold ${s(12/3)}px Helvetica`;
-            ctx.textAlign = "left";
-            ctx.fillText("TOTAL NETO", s(totalsX), s(totalsY + 18));
-            ctx.textAlign = "right";
-            ctx.fillText(formatMoney(total), s(190), s(totalsY + 18));
+            ctx.fillStyle = COLOR_PRIMARY; ctx.fillRect(s(totalsX - 5), s(totalsY + 10), s(70), s(12));
+            ctx.fillStyle = "#FFFFFF"; ctx.font = `bold ${s(12/3)}px Helvetica`;
+            ctx.textAlign = "left"; ctx.fillText("TOTAL NETO", s(totalsX), s(totalsY + 18));
+            ctx.textAlign = "right"; ctx.fillText(formatMoney(total), s(190), s(totalsY + 18));
             ctx.textAlign = "left";
 
-            // NOTAS
+            // Notas
             const notesY = currentY + 10;
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.font = `bold ${s(8/3)}px Helvetica`;
+            ctx.fillStyle = COLOR_PRIMARY; ctx.font = `bold ${s(8/3)}px Helvetica`;
             ctx.fillText("OBSERVACIONES:", s(20), s(notesY));
-            ctx.fillStyle = COLOR_TEXT;
-            ctx.font = `normal ${s(9/3)}px Helvetica`;
-            // Nota simple
+            ctx.fillStyle = COLOR_TEXT; ctx.font = `normal ${s(9/3)}px Helvetica`;
             ctx.fillText(data.notes || "Sin observaciones.", s(20), s(notesY + 5));
 
-            // FOOTER (Firma y Bancos)
-            // Ajustamos Y a 210
+            // Footer (Firma y Bancos)
             const FOOTER_Y = 210;
-            
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.font = `bold ${s(8/3)}px Helvetica`;
-            ctx.fillText("MÉTODO DE PAGO", s(20), s(FOOTER_Y));
-            ctx.beginPath();
-            ctx.strokeStyle = "#C8C8C8";
-            ctx.moveTo(s(20), s(FOOTER_Y+2));
-            ctx.lineTo(s(80), s(FOOTER_Y+2));
-            ctx.stroke();
+            // Verificar si cabe, si no, nueva pagina
+            // (Simplemente asumimos que notas ocupa poco, si notas es largo deberíamos calcular líneas)
+            // Para simplificar, si currentY es muy bajo, saltamos
+            if (currentY > 170) { // Si estamos muy abajo, nueva pagina para footer limpio
+                 // pero el footer es fijo en 210, así que solo importa si currentY lo pisa
+                 if (currentY > 200) { nextPage(); } // forzar salto si invade area de footer
+            }
 
-            ctx.fillStyle = COLOR_TEXT;
-            ctx.font = `normal ${s(9/3)}px Helvetica`;
+            ctx.fillStyle = COLOR_PRIMARY; ctx.font = `bold ${s(8/3)}px Helvetica`;
+            ctx.fillText("MÉTODO DE PAGO", s(20), s(FOOTER_Y));
+            ctx.beginPath(); ctx.strokeStyle = "#C8C8C8"; ctx.moveTo(s(20), s(FOOTER_Y+2)); ctx.lineTo(s(80), s(FOOTER_Y+2)); ctx.stroke();
+
+            ctx.fillStyle = COLOR_TEXT; ctx.font = `normal ${s(9/3)}px Helvetica`;
             ctx.fillText(data.bankOwner || "", s(20), s(FOOTER_Y+7));
             ctx.fillText(data.bankName || "", s(20), s(FOOTER_Y+11));
             ctx.font = `normal ${s(9/3)}px Courier New`;
             ctx.fillText(data.bankAccount || "", s(20), s(FOOTER_Y+15));
 
-            // Firma
-            ctx.textAlign = "center";
-            ctx.fillStyle = COLOR_GRAY;
-            ctx.font = `bold ${s(7/3)}px Helvetica`;
+            ctx.textAlign = "center"; ctx.fillStyle = COLOR_GRAY; ctx.font = `bold ${s(7/3)}px Helvetica`;
             ctx.fillText("AUTORIZADO POR:", s(150), s(FOOTER_Y));
-            
-            ctx.beginPath();
-            ctx.strokeStyle = COLOR_PRIMARY;
-            ctx.moveTo(s(120), s(FOOTER_Y+15));
-            ctx.lineTo(s(180), s(FOOTER_Y+15));
-            ctx.stroke();
-
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.font = `bold ${s(10/3)}px Helvetica`;
+            ctx.beginPath(); ctx.strokeStyle = COLOR_PRIMARY; ctx.moveTo(s(120), s(FOOTER_Y+15)); ctx.lineTo(s(180), s(FOOTER_Y+15)); ctx.stroke();
+            ctx.fillStyle = COLOR_PRIMARY; ctx.font = `bold ${s(10/3)}px Helvetica`;
             ctx.fillText(userData.displayName || "AGENTE", s(150), s(FOOTER_Y+20));
-            ctx.fillStyle = COLOR_GRAY;
-            ctx.font = `normal ${s(7/3)}px Helvetica`;
+            ctx.fillStyle = COLOR_GRAY; ctx.font = `normal ${s(7/3)}px Helvetica`;
             ctx.fillText(userData.title || "", s(150), s(FOOTER_Y+24));
 
-            // Footer Verde
-            ctx.textAlign = "left";
-            ctx.fillStyle = COLOR_PRIMARY;
-            ctx.fillRect(0, s(275), WIDTH, s(22));
-            
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = `normal ${s(8/3)}px Helvetica`;
-            ctx.fillText("Santiago de los Caballeros, R.D.", s(30), s(282));
-            ctx.font = `bold ${s(8/3)}px Helvetica`;
-            ctx.fillText("jir3hrealtygroup@outlook.com", s(30), s(286));
+            // Cerrar última página
+            drawFooterBar(ctx);
+            pages.push(canvas.toDataURL('image/jpeg', 0.9));
 
-            resolve(canvas.toDataURL('image/jpeg', 0.9));
+            resolve(pages);
         } catch (e) {
             reject(e);
         }
@@ -526,7 +532,6 @@ const InvoiceApp = ({ user, userData }) => {
 
   const handleAction = async (actionType) => {
     setIsExporting(true);
-    // Cerrar menú si está abierto
     setShowShareMenu(false); 
     const filename = `Cotizacion-${data.projectTitle || 'Jireh'}`;
 
@@ -536,11 +541,15 @@ const InvoiceApp = ({ user, userData }) => {
             doc.save(`${filename}.pdf`);
         }
         else if (actionType === 'image') {
-            const dataUrl = await generateNativeImage();
-            const link = document.createElement('a');
-            link.download = `${filename}.jpg`;
-            link.href = dataUrl;
-            link.click();
+            const images = await generateNativeImages();
+            // Descargar imágenes una por una
+            images.forEach((img, i) => {
+                const link = document.createElement('a');
+                const suffix = images.length > 1 ? `_${i+1}` : '';
+                link.download = `${filename}${suffix}.jpg`;
+                link.href = img;
+                link.click();
+            });
         }
         else if (actionType === 'share-pdf') {
             const doc = generateNativePDF();
@@ -550,10 +559,15 @@ const InvoiceApp = ({ user, userData }) => {
             else alert("Tu dispositivo no soporta compartir PDF directo.");
         }
         else if (actionType === 'share-image') {
-            const dataUrl = await generateNativeImage();
-            const blob = await (await fetch(dataUrl)).blob();
-            const file = new File([blob], `${filename}.jpg`, { type: "image/jpeg" });
-            if (navigator.share) await navigator.share({ files: [file], title: 'Cotización Jireh' });
+            const images = await generateNativeImages();
+            const files = await Promise.all(images.map(async (img, i) => {
+                const res = await fetch(img);
+                const blob = await res.blob();
+                const suffix = images.length > 1 ? `_${i+1}` : '';
+                return new File([blob], `${filename}${suffix}.jpg`, { type: "image/jpeg" });
+            }));
+            
+            if (navigator.share) await navigator.share({ files: files, title: 'Cotización Jireh' });
             else alert("Tu dispositivo no soporta compartir Imagen directo.");
         }
 
