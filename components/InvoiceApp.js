@@ -1,9 +1,8 @@
-"use client";
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { updateDoc, doc } from 'firebase/firestore';
-// CORRECCIÓN: Usar ruta relativa para garantizar que funcione sin alias '@'
-import { auth, db } from '../lib/firebase'; 
+import { auth, db } from '../lib/firebase';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import AdminPanel from './AdminPanel';
@@ -24,22 +23,20 @@ const InvoiceApp = ({ user, userData }) => {
   // UI States
   const [showAdmin, setShowAdmin] = useState(false);
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '' });
-  const [inputValue, setInputValue] = useState(''); // Para inputs en modales
-  const [isExporting, setIsExporting] = useState(false); // Estado para limpiar la UI antes de exportar
-  
-  const invoiceRef = useRef(null); // Referencia al wrapper de la hoja
+  const [inputValue, setInputValue] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   // --- AUTO-GUARDADO ---
   useEffect(() => {
-    const saved = localStorage.getItem('jireh_invoice_v2');
+    const saved = localStorage.getItem('jireh_invoice_v3');
     if (saved) {
       try { setData({ ...data, ...JSON.parse(saved) }); } 
-      catch(e) { console.error("Error parsing saved data", e); }
+      catch(e) { console.error("Error cargando datos", e); }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('jireh_invoice_v2', JSON.stringify(data));
+    localStorage.setItem('jireh_invoice_v3', JSON.stringify(data));
   }, [data]);
 
   // --- MODAL HANDLERS ---
@@ -50,7 +47,6 @@ const InvoiceApp = ({ user, userData }) => {
 
   const handleModalConfirm = async () => {
     const { type } = modalConfig;
-    
     if (type === 'clear') {
       setData({
         ...data,
@@ -58,75 +54,270 @@ const InvoiceApp = ({ user, userData }) => {
         clientName: '', clientId: '', clientLocation: '', clientContact: '',
         projectTitle: '', projectFolio: '', notes: ''
       });
-      localStorage.removeItem('jireh_invoice_v2');
+      localStorage.removeItem('jireh_invoice_v3');
     } 
     else if (type === 'updateName' || type === 'updateTitle') {
       if(inputValue.trim()) {
         const field = type === 'updateName' ? 'displayName' : 'title';
         await updateDoc(doc(db, 'public_users', user.uid), { [field]: inputValue });
-        window.location.reload(); // Recarga simple para reflejar cambios
+        window.location.reload(); 
       }
     }
-    
     setModalConfig({ isOpen: false, type: '', title: '' });
   };
 
-  // --- EXPORTACIÓN PDF "PERFECTA" ---
-  const handleExport = async (formatType) => {
-    setIsExporting(true);
+  // --- GENERACIÓN PDF NATIVA (DIBUJADO MANUAL) ---
+  const generateNativePDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Colores
+    const COLOR_PRIMARY = "#303F1D";
+    const COLOR_BG = "#f4eee8";
+    const COLOR_TEXT = "#1a2310";
+    const COLOR_GRAY = "#8e8b82";
+
+    // --- FONDO ---
+    doc.setFillColor(COLOR_BG);
+    doc.rect(0, 0, 210, 297, "F");
+
+    // --- HEADER ---
+    doc.setFillColor(COLOR_PRIMARY);
+    doc.rect(0, 0, 210, 35, "F");
+
+    // Logo Simulado (JIREH) - Dibujado vectorial
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.text("JIREH", 20, 22);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("SYSTEM", 20, 26);
+    doc.setTextColor(200, 200, 200);
+    doc.text("Inmobiliaria . Arquitectura . Construcción", 20, 31);
+
+    // --- INFO CLIENTE (Izquierda) ---
+    let y = 50;
+    doc.setTextColor(COLOR_PRIMARY);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("FECHA DE EMISIÓN", 20, y);
+    doc.setFontSize(12);
+    doc.text(data.fecha || "---", 20, y + 6);
+
+    y += 18;
+    // Barra lateral decorativa
+    doc.setDrawColor(COLOR_PRIMARY);
+    doc.setLineWidth(1);
+    doc.line(20, y, 20, y + 35);
+
+    doc.setFontSize(9);
+    doc.text("FACTURAR A:", 24, y + 3);
     
-    // Esperar un tick para que React quite botones de borrar (gracias al prop isExporting)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    doc.setFontSize(12);
+    doc.text(data.clientName || "Cliente Mostrador", 24, y + 9);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(COLOR_TEXT);
+    doc.text(data.clientId || "", 24, y + 15);
+    doc.text(data.clientLocation || "", 24, y + 20);
+    doc.text(data.clientContact || "", 24, y + 25);
 
-    const element = document.getElementById('invoice-paper-content');
-    if (!element) return;
+    // --- TITULO Y FOLIO (Derecha) ---
+    doc.setTextColor(COLOR_PRIMARY);
+    doc.setFontSize(32);
+    doc.setFont("helvetica", "normal");
+    doc.text("COTIZACIÓN", 190, 60, { align: "right" });
 
-    try {
-      // 1. Configuración de html2canvas para Alta Calidad
-      const canvas = await html2canvas(element, {
-        scale: 3, // 3x resolución para nitidez
-        useCORS: true, // Permitir imágenes externas si las hubiera
-        logging: false,
-        backgroundColor: "#f4eee8", // Coincide con el color del papel
-        windowWidth: 794, // Forzar ancho de escritorio A4
-        onclone: (clonedDoc) => {
-            // Asegurarse de que el elemento clonado no tenga transformaciones CSS
-            // Esto arregla el problema del "Zoom" en móviles
-            const clonedElement = clonedDoc.getElementById('invoice-paper-content');
-            if(clonedElement) {
-                clonedElement.style.transform = 'none';
-                clonedElement.style.margin = '0';
-            }
-        }
-      });
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("PROYECTO", 190, 75, { align: "right" });
+    doc.setFontSize(12);
+    doc.text(data.projectTitle || "---", 190, 81, { align: "right" });
 
-      if (formatType === 'jpg') {
-        const link = document.createElement('a');
-        link.download = `Cotizacion-${data.projectTitle || 'Jireh'}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg', 0.9);
-        link.click();
-      } else {
-        // PDF Exacto
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
+    doc.setFontSize(10);
+    doc.setTextColor(COLOR_GRAY);
+    doc.text(`FOLIO: ${data.projectFolio || "001"}`, 190, 88, { align: "right" });
 
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
+    // --- TABLA DE ITEMS ---
+    let startY = 105;
+    
+    // Encabezados
+    doc.setFillColor(COLOR_PRIMARY);
+    doc.rect(20, startY, 170, 8, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text("NO.", 23, startY + 5.5);
+    doc.text("DESCRIPCIÓN", 40, startY + 5.5);
+    doc.text("PRECIO", 145, startY + 5.5, { align: "right" });
+    doc.text("CANT.", 160, startY + 5.5, { align: "center" });
+    doc.text("TOTAL", 187, startY + 5.5, { align: "right" });
+
+    // Filas
+    let currentY = startY + 14;
+    doc.setTextColor(COLOR_TEXT);
+    doc.setFont("helvetica", "normal");
+    
+    data.items.forEach((item, index) => {
+        const totalLine = (item.price * item.qty);
         
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`Cotizacion-${data.projectTitle || 'Jireh'}.pdf`);
-      }
+        // No.
+        doc.setFontSize(9);
+        doc.text((index + 1).toString().padStart(2,'0'), 23, currentY);
+        
+        // Descripción (con ajuste de línea automático)
+        const descLines = doc.splitTextToSize(item.desc || "---", 95);
+        doc.text(descLines, 40, currentY);
+        
+        // Precio
+        doc.text(formatMoney(item.price), 145, currentY, { align: "right" });
+        
+        // Cant
+        doc.text(item.qty.toString(), 160, currentY, { align: "center" });
+        
+        // Total
+        doc.setFont("helvetica", "bold");
+        doc.text(formatMoney(totalLine), 187, currentY, { align: "right" });
+        
+        doc.setFont("helvetica", "normal");
+        
+        // Línea divisoria
+        const lineHeight = Math.max(descLines.length * 5, 8); // Altura dinámica
+        doc.setDrawColor(220, 220, 220);
+        doc.line(20, currentY + 3, 190, currentY + 3);
+        
+        currentY += lineHeight + 4; // Espacio para siguiente fila
+    });
 
-    } catch (err) {
-      console.error("Error exportando:", err);
-      // Fallback simple si falla (por ejemplo en entornos sin las librerías cargadas)
-      alert("Hubo un error al generar el documento. Verifica las dependencias.");
-    } finally {
-      setIsExporting(false);
+    // --- TOTALES ---
+    // Asegurar espacio
+    if (currentY > 220) { doc.addPage(); currentY = 40; doc.setFillColor(COLOR_BG); doc.rect(0,0,210,297,"F"); }
+    
+    const subtotal = data.items.reduce((acc, i) => acc + (i.price * i.qty), 0);
+    const itbis = data.useItbis ? subtotal * 0.18 : 0;
+    const total = subtotal + itbis;
+
+    const totalsX = 130;
+    const totalsY = currentY + 10;
+
+    doc.setTextColor(COLOR_TEXT);
+    doc.setFontSize(10);
+    
+    // Subtotal
+    doc.text("Subtotal:", totalsX, totalsY);
+    doc.text(formatMoney(subtotal), 190, totalsY, { align: "right" });
+    
+    // ITBIS
+    doc.text(data.useItbis ? "ITBIS (18%):" : "ITBIS (0%):", totalsX, totalsY + 6);
+    doc.text(formatMoney(itbis), 190, totalsY + 6, { align: "right" });
+    
+    // Total Caja Verde
+    doc.setFillColor(COLOR_PRIMARY);
+    doc.rect(totalsX - 5, totalsY + 10, 70, 12, "F"); // Caja
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL NETO", totalsX, totalsY + 18);
+    doc.text(formatMoney(total), 190, totalsY + 18, { align: "right" });
+
+    // --- OBSERVACIONES ---
+    const notesY = currentY + 10;
+    doc.setTextColor(COLOR_PRIMARY);
+    doc.setFontSize(8);
+    doc.text("OBSERVACIONES:", 20, notesY);
+    doc.setTextColor(COLOR_TEXT);
+    doc.setFont("helvetica", "normal");
+    const notesLines = doc.splitTextToSize(data.notes || "Sin observaciones adicionales.", 90);
+    doc.text(notesLines, 20, notesY + 5);
+
+    // --- FOOTER INFO (Bancos y Firma) ---
+    // Posicionar al final de la página
+    const bottomY = 250;
+    
+    // Bancos
+    doc.setFontSize(8);
+    doc.setTextColor(COLOR_PRIMARY);
+    doc.setFont("helvetica", "bold");
+    doc.text("MÉTODO DE PAGO", 20, bottomY);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, bottomY + 2, 80, bottomY + 2);
+    
+    doc.setTextColor(COLOR_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.text(data.bankOwner || "", 20, bottomY + 7);
+    doc.text(data.bankName || "", 20, bottomY + 11);
+    doc.setFont("courier", "normal");
+    doc.text(data.bankAccount || "", 20, bottomY + 15);
+
+    // Firma
+    doc.setTextColor(COLOR_GRAY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("AUTORIZADO POR:", 150, bottomY, { align: "center" });
+    
+    doc.setDrawColor(COLOR_PRIMARY);
+    doc.setLineWidth(0.5);
+    doc.line(120, bottomY + 15, 180, bottomY + 15); // Línea firma
+    
+    doc.setTextColor(COLOR_PRIMARY);
+    doc.setFontSize(10);
+    doc.text(userData.displayName || "AGENTE", 150, bottomY + 20, { align: "center" });
+    doc.setTextColor(COLOR_GRAY);
+    doc.setFontSize(7);
+    doc.text(userData.title || "", 150, bottomY + 24, { align: "center" });
+
+    // --- FOOTER VERDE FINAL ---
+    doc.setFillColor(COLOR_PRIMARY);
+    doc.rect(0, 275, 210, 22, "F");
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.text("Santiago de los Caballeros, R.D.", 30, 282);
+    doc.setFont("helvetica", "bold");
+    doc.text("jir3hrealtygroup@outlook.com", 30, 286);
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("849.435.2515", 190, 282, { align: "right" });
+    doc.text("829.344.9793", 190, 286, { align: "right" });
+    doc.text("US 954.319.4663", 190, 290, { align: "right" });
+
+    return doc;
+  };
+
+  const formatMoney = (amount) => {
+    return "RD$ " + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const handleExport = async (formatType) => {
+    if (formatType === 'pdf') {
+        const pdf = generateNativePDF();
+        pdf.save(`Cotizacion-${data.projectTitle || 'Jireh'}.pdf`);
+    } else {
+        // Para JPG usamos una técnica simple de clonación directa
+        // Aunque PDF es la prioridad, dejamos esto funcional
+        setIsExporting(true);
+        setTimeout(async () => {
+            const element = document.getElementById('invoice-paper-interactive');
+            if (element) {
+                try {
+                    const canvas = await html2canvas(element, { 
+                        scale: 2, 
+                        useCORS: true, 
+                        backgroundColor: "#f4eee8" 
+                    });
+                    const link = document.createElement('a');
+                    link.download = `Cotizacion.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.9);
+                    link.click();
+                } catch(e) { console.error(e); }
+                setIsExporting(false);
+            }
+        }, 500);
     }
   };
 
@@ -187,25 +378,22 @@ const InvoiceApp = ({ user, userData }) => {
         )}
       </Modal>
 
-      {/* AREA DE TRABAJO (Con Zoom Responsivo) */}
+      {/* AREA DE TRABAJO */}
       <div className="mt-8 mb-8 w-full flex justify-center overflow-visible px-2">
-        {/* Wrapper de Escala: Solo afecta visualización en pantalla */}
         <div 
-            className="origin-top transition-transform duration-200"
+            className="origin-top transition-transform duration-200 shadow-2xl"
             style={{ 
                 transform: 'scale(var(--scale-factor))',
-                '--scale-factor': '0.45' // Default mobile
+                '--scale-factor': '0.45' 
             }}
         >
-          {/* Estilos responsivos inline para ajustar el zoom según el ancho de pantalla */}
           <style jsx>{`
             @media (min-width: 450px) { div[style*="--scale-factor"] { --scale-factor: 0.55 !important; } }
             @media (min-width: 640px) { div[style*="--scale-factor"] { --scale-factor: 0.7 !important; } }
             @media (min-width: 1024px) { div[style*="--scale-factor"] { --scale-factor: 1 !important; } }
           `}</style>
           
-          {/* ID Específico para exportación */}
-          <div id="invoice-paper-content">
+          <div id="invoice-paper-interactive">
               <InvoicePaper 
                  data={data} 
                  setData={setData} 
