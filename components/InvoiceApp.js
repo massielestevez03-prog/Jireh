@@ -1,9 +1,9 @@
-
+"use client";
 import React, { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { updateDoc, doc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas'; // Se mantiene solo como respaldo
 import jsPDF from 'jspdf';
 import AdminPanel from './AdminPanel';
 import Modal from './Modal';
@@ -66,7 +66,7 @@ const InvoiceApp = ({ user, userData }) => {
     setModalConfig({ isOpen: false, type: '', title: '' });
   };
 
-  // --- GENERACIÓN PDF NATIVA (DIBUJADO MANUAL) ---
+  // --- GENERACIÓN PDF NATIVA (Motor Vectorial Perfecto) ---
   const generateNativePDF = () => {
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -88,7 +88,7 @@ const InvoiceApp = ({ user, userData }) => {
     doc.setFillColor(COLOR_PRIMARY);
     doc.rect(0, 0, 210, 35, "F");
 
-    // Logo Simulado (JIREH) - Dibujado vectorial
+    // Logo
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
@@ -99,7 +99,7 @@ const InvoiceApp = ({ user, userData }) => {
     doc.setTextColor(200, 200, 200);
     doc.text("Inmobiliaria . Arquitectura . Construcción", 20, 31);
 
-    // --- INFO CLIENTE (Izquierda) ---
+    // --- INFO CLIENTE ---
     let y = 50;
     doc.setTextColor(COLOR_PRIMARY);
     doc.setFontSize(9);
@@ -109,7 +109,7 @@ const InvoiceApp = ({ user, userData }) => {
     doc.text(data.fecha || "---", 20, y + 6);
 
     y += 18;
-    // Barra lateral decorativa
+    // Barra lateral
     doc.setDrawColor(COLOR_PRIMARY);
     doc.setLineWidth(1);
     doc.line(20, y, 20, y + 35);
@@ -127,7 +127,7 @@ const InvoiceApp = ({ user, userData }) => {
     doc.text(data.clientLocation || "", 24, y + 20);
     doc.text(data.clientContact || "", 24, y + 25);
 
-    // --- TITULO Y FOLIO (Derecha) ---
+    // --- TITULO Y FOLIO ---
     doc.setTextColor(COLOR_PRIMARY);
     doc.setFontSize(32);
     doc.setFont("helvetica", "normal");
@@ -164,39 +164,59 @@ const InvoiceApp = ({ user, userData }) => {
     doc.setFont("helvetica", "normal");
     
     data.items.forEach((item, index) => {
+        // Nueva página si se acaba el espacio
+        if (currentY > 230) { 
+            doc.addPage(); 
+            currentY = 40; 
+            doc.setFillColor(COLOR_BG); 
+            doc.rect(0,0,210,297,"F");
+            
+            // Re-dibujar encabezados
+            doc.setFillColor(COLOR_PRIMARY);
+            doc.rect(20, currentY - 10, 170, 8, "F");
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "bold");
+            doc.text("NO.", 23, currentY - 4.5);
+            doc.text("DESCRIPCIÓN", 40, currentY - 4.5);
+            doc.text("PRECIO", 145, currentY - 4.5, { align: "right" });
+            doc.text("CANT.", 160, currentY - 4.5, { align: "center" });
+            doc.text("TOTAL", 187, currentY - 4.5, { align: "right" });
+            doc.setTextColor(COLOR_TEXT);
+            doc.setFont("helvetica", "normal");
+        }
+
         const totalLine = (item.price * item.qty);
         
-        // No.
+        // Datos Fila
         doc.setFontSize(9);
         doc.text((index + 1).toString().padStart(2,'0'), 23, currentY);
         
-        // Descripción (con ajuste de línea automático)
         const descLines = doc.splitTextToSize(item.desc || "---", 95);
         doc.text(descLines, 40, currentY);
         
-        // Precio
         doc.text(formatMoney(item.price), 145, currentY, { align: "right" });
-        
-        // Cant
         doc.text(item.qty.toString(), 160, currentY, { align: "center" });
         
-        // Total
         doc.setFont("helvetica", "bold");
         doc.text(formatMoney(totalLine), 187, currentY, { align: "right" });
-        
         doc.setFont("helvetica", "normal");
         
         // Línea divisoria
-        const lineHeight = Math.max(descLines.length * 5, 8); // Altura dinámica
+        const lineHeight = Math.max(descLines.length * 5, 8);
         doc.setDrawColor(220, 220, 220);
         doc.line(20, currentY + 3, 190, currentY + 3);
         
-        currentY += lineHeight + 4; // Espacio para siguiente fila
+        currentY += lineHeight + 4;
     });
 
-    // --- TOTALES ---
-    // Asegurar espacio
-    if (currentY > 220) { doc.addPage(); currentY = 40; doc.setFillColor(COLOR_BG); doc.rect(0,0,210,297,"F"); }
+    // --- TOTALES Y OBSERVACIONES ---
+    if (currentY > 200) { 
+        doc.addPage(); 
+        currentY = 40; 
+        doc.setFillColor(COLOR_BG); 
+        doc.rect(0,0,210,297,"F"); 
+    }
     
     const subtotal = data.items.reduce((acc, i) => acc + (i.price * i.qty), 0);
     const itbis = data.useItbis ? subtotal * 0.18 : 0;
@@ -208,24 +228,22 @@ const InvoiceApp = ({ user, userData }) => {
     doc.setTextColor(COLOR_TEXT);
     doc.setFontSize(10);
     
-    // Subtotal
+    // Bloque Totales
     doc.text("Subtotal:", totalsX, totalsY);
     doc.text(formatMoney(subtotal), 190, totalsY, { align: "right" });
     
-    // ITBIS
     doc.text(data.useItbis ? "ITBIS (18%):" : "ITBIS (0%):", totalsX, totalsY + 6);
     doc.text(formatMoney(itbis), 190, totalsY + 6, { align: "right" });
     
-    // Total Caja Verde
     doc.setFillColor(COLOR_PRIMARY);
-    doc.rect(totalsX - 5, totalsY + 10, 70, 12, "F"); // Caja
+    doc.rect(totalsX - 5, totalsY + 10, 70, 12, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text("TOTAL NETO", totalsX, totalsY + 18);
     doc.text(formatMoney(total), 190, totalsY + 18, { align: "right" });
 
-    // --- OBSERVACIONES ---
+    // Observaciones
     const notesY = currentY + 10;
     doc.setTextColor(COLOR_PRIMARY);
     doc.setFontSize(8);
@@ -236,8 +254,18 @@ const InvoiceApp = ({ user, userData }) => {
     doc.text(notesLines, 20, notesY + 5);
 
     // --- FOOTER INFO (Bancos y Firma) ---
-    // Posicionar al final de la página
-    const bottomY = 250;
+    // [CORRECCIÓN] Subimos la posición inicial del footer para que no quede "caído"
+    // Antes 240, Ahora 225 para dar más aire respecto al borde inferior verde
+    const FOOTER_START_Y = 225; 
+    
+    // Calculamos si necesitamos nueva página
+    if (currentY + (notesLines.length * 5) + 35 > FOOTER_START_Y) {
+        doc.addPage();
+        doc.setFillColor(COLOR_BG); 
+        doc.rect(0,0,210,297,"F");
+    }
+    
+    const bottomY = FOOTER_START_Y;
     
     // Bancos
     doc.setFontSize(8);
@@ -271,7 +299,7 @@ const InvoiceApp = ({ user, userData }) => {
     doc.setFontSize(7);
     doc.text(userData.title || "", 150, bottomY + 24, { align: "center" });
 
-    // --- FOOTER VERDE FINAL ---
+    // --- BARRA VERDE FINAL ---
     doc.setFillColor(COLOR_PRIMARY);
     doc.rect(0, 275, 210, 22, "F");
     
@@ -293,31 +321,43 @@ const InvoiceApp = ({ user, userData }) => {
     return "RD$ " + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const handleExport = async (formatType) => {
-    if (formatType === 'pdf') {
-        const pdf = generateNativePDF();
-        pdf.save(`Cotizacion-${data.projectTitle || 'Jireh'}.pdf`);
-    } else {
-        // Para JPG usamos una técnica simple de clonación directa
-        // Aunque PDF es la prioridad, dejamos esto funcional
-        setIsExporting(true);
-        setTimeout(async () => {
-            const element = document.getElementById('invoice-paper-interactive');
-            if (element) {
-                try {
-                    const canvas = await html2canvas(element, { 
-                        scale: 2, 
-                        useCORS: true, 
-                        backgroundColor: "#f4eee8" 
-                    });
-                    const link = document.createElement('a');
-                    link.download = `Cotizacion.jpg`;
-                    link.href = canvas.toDataURL('image/jpeg', 0.9);
-                    link.click();
-                } catch(e) { console.error(e); }
-                setIsExporting(false);
+  const handleAction = async (actionType) => {
+    setIsExporting(true);
+    const filename = `Cotizacion-${data.projectTitle || 'Jireh'}`;
+
+    try {
+        // [SOLUCIÓN IMÁGENES]
+        // Tanto para 'pdf', 'jpg' como 'share', usamos el motor nativo de PDF.
+        // Esto evita que las imágenes se desfiguren al usar html2canvas en móviles.
+        // El formato PDF es superior para cotizaciones.
+        const doc = generateNativePDF();
+        
+        if (actionType === 'share') {
+            const pdfBlob = doc.output('blob');
+            const file = new File([pdfBlob], `${filename}.pdf`, { type: "application/pdf" });
+
+            if (navigator.share) {
+                await navigator.share({
+                    title: 'Cotización JIREH',
+                    text: `Adjunto cotización para ${data.clientName}`,
+                    files: [file]
+                });
+            } else {
+                // Fallback si no soporta compartir
+                doc.save(`${filename}.pdf`);
             }
-        }, 500);
+        } 
+        else {
+            // Para descargar (PDF o JPG intentado) siempre entregamos el PDF perfecto
+            // Es la mejor práctica para evitar distorsiones de imagen
+            doc.save(`${filename}.pdf`);
+        }
+
+    } catch (error) {
+        console.error("Error en acción:", error);
+        alert("Ocurrió un error al procesar el documento.");
+    } finally {
+        setIsExporting(false);
     }
   };
 
@@ -398,7 +438,7 @@ const InvoiceApp = ({ user, userData }) => {
                  data={data} 
                  setData={setData} 
                  userData={userData} 
-                 isExporting={isExporting} 
+                 isExporting={false} 
               />
           </div>
         </div>
@@ -406,21 +446,22 @@ const InvoiceApp = ({ user, userData }) => {
 
       {/* TOOLBAR INFERIOR */}
       <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur border border-white/20 p-2 rounded-2xl shadow-2xl flex gap-2 z-50">
-        <button onClick={() => openModal('clear', 'Limpiar Formulario')} className="flex flex-col items-center justify-center w-16 h-14 rounded-xl hover:bg-red-50 text-gray-500 hover:text-red-500 transition group">
+        <button onClick={() => openModal('clear', 'Limpiar Formulario')} className="flex flex-col items-center justify-center w-14 h-14 rounded-xl hover:bg-red-50 text-gray-500 hover:text-red-500 transition group">
           <i className="fas fa-trash-alt text-lg mb-1 group-hover:scale-110 transition-transform"></i>
-          <span className="text-[10px] font-bold">Limpiar</span>
+          <span className="text-[9px] font-bold">Limpiar</span>
         </button>
         
         <div className="w-px bg-gray-300 mx-1 my-2"></div>
 
-        <button onClick={() => handleExport('jpg')} className="flex flex-col items-center justify-center w-16 h-14 rounded-xl hover:bg-blue-50 text-blue-600 transition group">
-          <i className="fas fa-image text-lg mb-1 group-hover:scale-110 transition-transform"></i>
-          <span className="text-[10px] font-bold">Imagen</span>
+        {/* Botón Compartir ahora visible y funcional (Usa PDF) */}
+        <button onClick={() => handleAction('share')} disabled={isExporting} className="flex flex-col items-center justify-center w-14 h-14 rounded-xl hover:bg-blue-50 text-blue-600 transition group">
+          <i className="fas fa-share-alt text-lg mb-1 group-hover:scale-110 transition-transform"></i>
+          <span className="text-[9px] font-bold">Compartir</span>
         </button>
 
-        <button onClick={() => handleExport('pdf')} className="flex flex-col items-center justify-center w-20 h-14 bg-[#303F1D] text-white rounded-xl shadow-lg hover:bg-[#232e15] transition group transform hover:-translate-y-1">
-          <i className="fas fa-file-pdf text-xl mb-1 group-hover:scale-110 transition-transform"></i>
-          <span className="text-[10px] font-bold">Descargar PDF</span>
+        <button onClick={() => handleAction('pdf')} disabled={isExporting} className="flex flex-col items-center justify-center w-16 h-14 bg-[#303F1D] text-white rounded-xl shadow-lg hover:bg-[#232e15] transition group transform hover:-translate-y-1">
+          {isExporting ? <i className="fas fa-circle-notch fa-spin text-xl"></i> : <i className="fas fa-file-pdf text-xl mb-1 group-hover:scale-110 transition-transform"></i>}
+          <span className="text-[9px] font-bold">Descargar</span>
         </button>
       </div>
 
