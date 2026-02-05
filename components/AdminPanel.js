@@ -1,75 +1,90 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
-const AdminPanel = ({ onClose }) => {
+const AdminPanel = ({ onClose, companyId, companyData }) => {
+  const [tab, setTab] = useState('company');
+  const [formData, setFormData] = useState({ ...companyData });
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchUsers = async () => {
-      try {
-          const q = query(collection(db, 'public_users'));
+      if (companyId) {
+          const q = query(collection(db, 'public_users'), where('companyId', '==', companyId));
           const snapshot = await getDocs(q);
           setUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-          console.error("Error cargando usuarios:", e);
       }
-      setLoading(false);
     };
     fetchUsers();
-  }, []);
+  }, [companyId]);
 
-  const toggleApprove = async (userId, currentStatus) => {
-    await updateDoc(doc(db, 'public_users', userId), { approved: !currentStatus });
-    setUsers(users.map(u => u.id === userId ? { ...u, approved: !currentStatus } : u));
+  const saveCompany = async () => {
+      await updateDoc(doc(db, 'companies', companyId), formData);
+      alert('Datos guardados exitosamente. Recarga la página para ver los cambios.');
+  };
+
+  const toggleUser = async (uid, status) => {
+      await updateDoc(doc(db, 'public_users', uid), { approved: !status });
+      setUsers(users.map(u => u.id === uid ? { ...u, approved: !status } : u));
   };
 
   return (
     <div className="h-full flex flex-col bg-white">
-        <div className="bg-[#303F1D] p-4 text-white flex justify-between items-center">
-          <h2 className="font-bold text-lg">Administración de Usuarios</h2>
-          <button onClick={onClose} className="text-white hover:text-gray-300 text-xl font-bold">&times;</button>
+        <div className="p-4 bg-gray-800 text-white flex justify-between items-center">
+            <h2 className="font-bold">Panel de Administración</h2>
+            <button onClick={onClose} className="text-2xl">&times;</button>
         </div>
+        
+        <div className="flex border-b">
+            <button onClick={() => setTab('company')} className={`flex-1 p-3 font-bold ${tab === 'company' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Empresa</button>
+            <button onClick={() => setTab('users')} className={`flex-1 p-3 font-bold ${tab === 'users' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Empleados</button>
+        </div>
+
         <div className="p-6 overflow-y-auto flex-1">
-          {loading ? (
-              <div className="flex items-center justify-center h-40">
-                  <span className="text-gray-500 animate-pulse">Cargando...</span>
-              </div>
-          ) : (
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left border-collapse">
-                <thead className="bg-gray-100 text-gray-700 uppercase font-bold text-xs">
-                    <tr><th className="px-4 py-3 border-b">Usuario</th><th className="px-4 py-3 border-b">Estado</th><th className="px-4 py-3 border-b text-right">Acción</th></tr>
-                </thead>
-                <tbody className="text-gray-700">
-                    {users.map(u => (
-                    <tr key={u.id} className="border-b hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3">
-                            <div className="font-bold text-[#303F1D]">{u.displayName}</div>
-                            <div className="text-xs text-gray-500">{u.email}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                            {u.approved ? 
-                                <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-bold">Aprobado</span> : 
-                                <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">Pendiente</span>
-                            }
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                        <button 
-                            onClick={() => toggleApprove(u.id, u.approved)} 
-                            className={`text-xs font-bold px-3 py-1 rounded transition-colors ${u.approved ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
-                        >
-                            {u.approved ? 'Revocar' : 'Aprobar'}
-                        </button>
-                        </td>
-                    </tr>
-                    ))}
-                </tbody>
+            {tab === 'company' ? (
+                <div className="space-y-4">
+                    <div className="bg-yellow-50 p-3 rounded border border-yellow-200 text-sm">
+                        <strong>Código de Invitación:</strong> <span className="font-mono bg-white px-2 py-1 ml-2 border rounded select-all">{companyData?.code}</span>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">Nombre Empresa</label>
+                        <input className="w-full border p-2 rounded" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">Color Principal</label>
+                        <input type="color" className="w-full h-10 border p-1 rounded" value={formData.primaryColor || '#000000'} onChange={e => setFormData({...formData, primaryColor: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">URL Logo</label>
+                        <input className="w-full border p-2 rounded" value={formData.logoUrl || ''} onChange={e => setFormData({...formData, logoUrl: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">Dirección / Contacto</label>
+                        <textarea className="w-full border p-2 rounded" rows={3} value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} />
+                    </div>
+                    <button onClick={saveCompany} className="w-full bg-blue-600 text-white font-bold py-2 rounded">Guardar Cambios</button>
+                </div>
+            ) : (
+                <table className="w-full text-left text-sm">
+                    <thead><tr className="border-b"><th className="py-2">Usuario</th><th className="py-2">Estado</th><th className="py-2 text-right">Acción</th></tr></thead>
+                    <tbody>
+                        {users.map(u => (
+                            <tr key={u.id} className="border-b">
+                                <td className="py-2">{u.displayName}<br/><span className="text-gray-500 text-xs">{u.email}</span></td>
+                                <td className="py-2">{u.approved ? <span className="text-green-600 font-bold">Aprobado</span> : <span className="text-yellow-600 font-bold">Pendiente</span>}</td>
+                                <td className="py-2 text-right">
+                                    {u.role !== 'owner' && (
+                                        <button onClick={() => toggleUser(u.id, u.approved)} className={`px-2 py-1 rounded text-xs font-bold ${u.approved ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                            {u.approved ? 'Revocar' : 'Aprobar'}
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
                 </table>
-            </div>
-          )}
+            )}
         </div>
     </div>
   );
